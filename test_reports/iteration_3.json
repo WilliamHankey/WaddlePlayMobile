@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 3 (Playdate creation w/ private_note, Saved Resources, Match Reasons) tested end-to-end. Backend pytest suite (test_iteration3.py): 7/7 PASS — POST /api/playdates returns id + private_note; GET /api/playdates/{id} exposes private_note only to host (verified with second signup user — hidden for non-host); every item in GET /api/playdates carries match_reasons (list) + match_score (int); POST /api/resources/{id}/save marks saved=true, unsave clears it, GET /api/profile/saved-resources returns items in reverse-chronological order (rs-3, rs-2, rs-1 after saving in that order). Frontend Expo web preview (390x844): Sign-in via signin-email-input/signin-password-input/signin-submit-button works. Home lists 8 playdate cards each with a *-reasons chip row ('Why it matches'). Playdates tab → pd-add opens Host a playdate screen; all 14 requested testIDs present (create-title, create-cat-park, create-location, create-date, create-start, create-end, create-agemin, create-agemax, create-max, create-desc, create-sensory-quiet, create-interest-nature, create-private, create-submit). Submitting a valid form (title/location/date + private note) navigated to /playdate/pd-35ae98e7 with playdate-reasons chips AND playdate-private-note visible to the host. On seeded pd-park, playdate-reasons visible, playdate-private-note correctly hidden. Resources page: 5 bookmark-{id} buttons, resources-kind-saved chip present with count badge '2', filter shows 2 resource-* rows after saving two items. Profile: 2 profile-saved-* rows shown (no profile-empty-saved since 2 are saved). All acceptance criteria for the review request met.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "PlaydateCard/global StyleSheet", "issue": "React Native web warning: 'shadow*' style props are deprecated. Use 'boxShadow'. Reference: /app/frontend/src/components/playdate-card.tsx:86 (and other files using shadowColor/shadowOpacity/shadowRadius/shadowOffset). Non-blocking but repeats in console."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/test_reports/pytest/iter3_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Replace shadow* style props with boxShadow to silence deprecation warnings on RN Web.",
+    "(Carryover from iter 2) server.py ~870 lines — consider splitting seed data + feature routers."
+  ],
+  "critical_code_review_comments": [
+    "match_details() correctly dedupes reasons preserving order and caps at 3 — matches spec.",
+    "GET /api/playdates/{id} correctly pops private_note when caller is neither host nor attendee (server.py:326-327).",
+    "POST /api/playdates trims private_note and stores None when blank — good.",
+    "GET /api/profile/saved-resources sorts by saved_at DESC and re-orders after find() to preserve chronology — good.",
+    "Resources list decorates saved=true from saved_resources collection — no leakage across users.",
+    "Deprecated FastAPI @app.on_event still used (noted iter 1 & 2)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7 new + all prior iter 1&2 endpoints unchanged)", "frontend": "100% on all requested testIDs (14/14 create-*, pd-add, playdate-reasons, playdate-private-note host-only visibility, home *-reasons, bookmark-{id}, resources-kind-saved w/ count badge, profile-saved-*)"},
+  "seed_data_creation": "Created two playdates via API/UI during tests (ids pd-XXXXXXXX with title 'TEST_Quiet park hangout' and 'TEST UI 1790433464') attributed to demo-user-1 — harmless. Signed up a throwaway TEST_ user via /auth/signup to verify private_note hidden from non-host. Toggled rs-1..rs-3 saved state on demo user (cleaned up in backend test but 2 were left saved by UI test which is the profile screenshot state).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend BASE_URL from EXPO_PUBLIC_BACKEND_URL (env). Auth: POST /api/auth/login with demo@waddleplay.com/password123. Playdates endpoints: POST /api/playdates (body incl. private_note optional), GET /api/playdates/{id} (private_note only for host or attendee), GET /api/playdates (all items carry match_reasons + match_score). Resources: POST /api/resources/{id}/save & /unsave, GET /api/resources (each item has saved bool), GET /api/profile/saved-resources (reverse chronological). Frontend key testIDs added this iteration: pd-add, create-title/cat-*/location/date/start/end/agemin/agemax/max/desc/sensory-*/interest-*/private/submit, playdate-reasons, playdate-private-note, bookmark-{id}, resources-kind-saved (with count badge), profile-saved-*, profile-empty-saved. Home playdate cards get a -reasons suffixed testID via PlaydateCard prop.",
+  "rca_of_issue": "N/A — no bugs found in this iteration."
+}

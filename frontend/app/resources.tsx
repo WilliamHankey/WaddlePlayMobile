@@ -3,17 +3,34 @@ import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndic
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
 import { colors, spacing, radius } from "@/src/theme";
 import { ResourcesAPI } from "@/src/api";
 
 const KIND_FILTERS = [
   { id: "all", label: "All", icon: "grid" as const },
+  { id: "saved", label: "Saved", icon: "bookmark" as const },
   { id: "article", label: "Articles", icon: "file-text" as const },
   { id: "guide", label: "Guides", icon: "book-open" as const },
   { id: "video", label: "Videos", icon: "play-circle" as const },
 ];
+
+function BookmarkBtn({ resource }: { resource: any }) {
+  const qc = useQueryClient();
+  const saveMut = useMutation({
+    mutationFn: () => resource.saved ? ResourcesAPI.unsave(resource.id) : ResourcesAPI.save(resource.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      qc.invalidateQueries({ queryKey: ["saved-resources"] });
+    },
+  });
+  return (
+    <Pressable onPress={() => saveMut.mutate()} hitSlop={10} testID={`bookmark-${resource.id}`}>
+      <Icon name="bookmark" size={20} color={resource.saved ? colors.brandPrimary : colors.muted} />
+    </Pressable>
+  );
+}
 
 export default function Resources() {
   const insets = useSafeAreaInsets();
@@ -24,10 +41,13 @@ export default function Resources() {
 
   const { featured, latest } = useMemo(() => {
     let list = (data || []) as any[];
-    if (kind !== "all") list = list.filter((r) => r.kind === kind);
+    if (kind === "saved") list = list.filter((r) => r.saved);
+    else if (kind !== "all") list = list.filter((r) => r.kind === kind);
     if (query.trim()) list = list.filter((r) => r.title.toLowerCase().includes(query.toLowerCase()));
     return { featured: list.filter((r) => r.featured), latest: list.filter((r) => !r.featured) };
   }, [data, kind, query]);
+
+  const savedCount = (data || []).filter((r: any) => r.saved).length;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -36,8 +56,9 @@ export default function Resources() {
           <Icon name="arrow-left" size={20} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.title}>Resources</Text>
-        <Pressable style={styles.iconBtn} testID="resources-saved">
+        <Pressable style={styles.iconBtn} testID="resources-saved" onPress={() => setKind("saved")}>
           <Icon name="bookmark" size={18} color={colors.brandPrimary} />
+          {savedCount > 0 && <View style={styles.savedBadge}><Text style={styles.savedBadgeText}>{savedCount}</Text></View>}
         </Pressable>
       </View>
 
@@ -53,6 +74,9 @@ export default function Resources() {
               <Pressable key={k.id} onPress={() => setKind(k.id)} style={[styles.chip, active && styles.chipActive]} testID={`resources-kind-${k.id}`}>
                 <Icon name={k.icon} size={14} color={active ? colors.onBrandPrimary : colors.onSurface} />
                 <Text style={[styles.chipText, active && { color: colors.onBrandPrimary }]}>{k.label}</Text>
+                {k.id === "saved" && savedCount > 0 && (
+                  <View style={styles.chipCount}><Text style={styles.chipCountText}>{savedCount}</Text></View>
+                )}
               </Pressable>
             );
           })}
@@ -62,13 +86,22 @@ export default function Resources() {
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxl }}>
         {isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : (
           <>
+            {kind === "saved" && featured.length === 0 && latest.length === 0 && (
+              <View style={styles.empty}>
+                <Icon name="bookmark" size={32} color={colors.brandPrimary} />
+                <Text style={styles.emptyTitle}>Nothing saved yet</Text>
+                <Text style={styles.emptyText}>Tap the bookmark on any resource to save it here.</Text>
+              </View>
+            )}
+
             {featured.length > 0 && (
               <>
                 <Text style={styles.section}>Featured</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingRight: spacing.xl }}>
                   {featured.map((r: any) => (
-                    <Pressable key={r.id} style={styles.featured} testID={`resource-${r.id}`}>
+                    <View key={r.id} style={styles.featured} testID={`resource-${r.id}`}>
                       <Image source={{ uri: r.image_url }} style={styles.featuredImg} contentFit="cover" />
+                      <View style={styles.featuredBookmark}><BookmarkBtn resource={r} /></View>
                       <View style={styles.featuredBody}>
                         <View style={styles.kindPill}><Text style={styles.kindPillText}>{r.kind}</Text></View>
                         <Text style={styles.featuredTitle} numberOfLines={2}>{r.title}</Text>
@@ -78,15 +111,15 @@ export default function Resources() {
                           <Text style={styles.read}>{r.read_minutes} min read</Text>
                         </View>
                       </View>
-                    </Pressable>
+                    </View>
                   ))}
                 </ScrollView>
               </>
             )}
 
-            <Text style={[styles.section, { marginTop: spacing.xl }]}>Latest resources</Text>
+            {latest.length > 0 && <Text style={[styles.section, { marginTop: spacing.xl }]}>{kind === "saved" ? "Saved" : "Latest resources"}</Text>}
             {latest.map((r: any) => (
-              <Pressable key={r.id} style={styles.row} testID={`resource-${r.id}`}>
+              <View key={r.id} style={styles.row} testID={`resource-${r.id}`}>
                 <Image source={{ uri: r.image_url }} style={styles.rowImg} contentFit="cover" />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle} numberOfLines={2}>{r.title}</Text>
@@ -95,8 +128,8 @@ export default function Resources() {
                     <Text style={styles.read}>{r.read_minutes} min</Text>
                   </View>
                 </View>
-                <Icon name="bookmark" size={18} color={colors.muted} />
-              </Pressable>
+                <BookmarkBtn resource={r} />
+              </View>
             ))}
           </>
         )}
@@ -111,6 +144,8 @@ const styles = StyleSheet.create({
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   title: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
   iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+  savedBadge: { position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.brandTertiary, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
+  savedBadgeText: { color: colors.onBrandTertiary, fontSize: 10, fontWeight: "700" },
   sticky: { paddingHorizontal: spacing.xl, paddingBottom: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
   search: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, height: 44, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   searchInput: { flex: 1, color: colors.onSurface, fontSize: 14 },
@@ -118,9 +153,12 @@ const styles = StyleSheet.create({
   chip: { flexShrink: 0, height: 34, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
   chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
   chipText: { color: colors.onSurface, fontSize: 12, fontWeight: "500" },
+  chipCount: { marginLeft: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.brandTertiary, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
+  chipCountText: { color: colors.onBrandTertiary, fontSize: 10, fontWeight: "700" },
   section: { fontSize: 13, fontWeight: "700", color: colors.muted, marginBottom: spacing.md, textTransform: "uppercase", letterSpacing: 0.5 },
   featured: { width: 260, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
   featuredImg: { width: "100%", height: 130 },
+  featuredBookmark: { position: "absolute", top: 8, right: 8, width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   featuredBody: { padding: spacing.md, gap: 6 },
   kindPill: { alignSelf: "flex-start", backgroundColor: colors.brandSecondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill },
   kindPillText: { color: colors.onBrandSecondary, fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
@@ -132,4 +170,7 @@ const styles = StyleSheet.create({
   rowImg: { width: 72, height: 72, borderRadius: radius.md },
   rowTitle: { fontWeight: "700", color: colors.onSurface, marginBottom: 6 },
   rowMetaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  empty: { alignItems: "center", padding: spacing.xxl, gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, marginBottom: spacing.lg },
+  emptyTitle: { fontWeight: "700", color: colors.onSurface },
+  emptyText: { color: colors.muted, textAlign: "center", fontSize: 13 },
 });

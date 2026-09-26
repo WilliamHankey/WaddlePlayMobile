@@ -60,7 +60,7 @@ export default function PlaydatesTab() {
       <TopBar />
       <View style={styles.header}>
         <Text style={styles.title}>Playdates</Text>
-        <Pressable style={styles.addBtn} testID="pd-add" onPress={() => router.push("/(tabs)/explore")}>
+        <Pressable style={styles.addBtn} testID="pd-add" onPress={() => router.push("/playdate/create")}>
           <Icon name="plus" size={18} color={colors.onBrandPrimary} />
         </Pressable>
       </View>

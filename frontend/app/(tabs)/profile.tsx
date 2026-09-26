@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
 import { colors, spacing, radius } from "@/src/theme";
-import { ProfileAPI } from "@/src/api";
+import { ProfileAPI, ResourcesAPI } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { TopBar } from "@/src/components/top-bar";
 
@@ -24,6 +24,7 @@ export default function Profile() {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const { data: profile, isLoading } = useQuery({ queryKey: ["profile"], queryFn: ProfileAPI.getMe });
+  const { data: saved } = useQuery({ queryKey: ["saved-resources"], queryFn: ResourcesAPI.saved });
 
   if (isLoading || !profile) {
     return (
@@ -97,6 +98,34 @@ export default function Profile() {
       </View>
 
       <View style={styles.section}>
+        <View style={styles.savedHeader}>
+          <Text style={styles.sectionTitle}>Saved resources</Text>
+          <Pressable onPress={() => router.push("/resources")} testID="profile-view-saved">
+            <Text style={styles.viewAll}>View all</Text>
+          </Pressable>
+        </View>
+        {(saved || []).length === 0 ? (
+          <Pressable style={styles.savedEmpty} onPress={() => router.push("/resources")} testID="profile-empty-saved">
+            <Icon name="bookmark" size={20} color={colors.brandPrimary} />
+            <Text style={styles.savedEmptyText}>Bookmark articles & guides so they build up here</Text>
+            <Icon name="chevron-right" size={16} color={colors.muted} />
+          </Pressable>
+        ) : (
+          <View>
+            {(saved || []).slice(0, 3).map((r: any) => (
+              <Pressable key={r.id} style={styles.savedRow} testID={`profile-saved-${r.id}`} onPress={() => router.push("/resources")}>
+                <View style={styles.savedIcon}><Icon name={r.kind === "video" ? "play-circle" : r.kind === "guide" ? "book-open" : "file-text"} size={16} color={colors.brandPrimary} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.savedTitle} numberOfLines={2}>{r.title}</Text>
+                  <Text style={styles.savedMeta}>{r.kind} · {r.read_minutes} min</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Safety</Text>
         <View style={styles.safetyRow}>
           <Icon name="shield" size={18} color={colors.brandPrimary} />
@@ -151,4 +180,12 @@ const styles = StyleSheet.create({
   muted: { color: colors.muted },
   signout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginHorizontal: spacing.xl, marginTop: spacing.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.error, borderRadius: radius.lg },
   signoutText: { color: colors.error, fontWeight: "700" },
+  savedHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
+  viewAll: { color: colors.brandPrimary, fontWeight: "600", fontSize: 13 },
+  savedEmpty: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+  savedEmptyText: { flex: 1, color: colors.muted, fontSize: 13, lineHeight: 18 },
+  savedRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  savedIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
+  savedTitle: { fontWeight: "600", color: colors.onSurface, fontSize: 14 },
+  savedMeta: { color: colors.muted, fontSize: 12, marginTop: 2, textTransform: "capitalize" },
 });

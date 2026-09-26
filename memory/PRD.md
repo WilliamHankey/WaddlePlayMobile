@@ -6,33 +6,39 @@ Waddle Play helps parents of autistic and neurodivergent children arrange safe, 
 ## Features shipped
 
 ### Auth & shell
-- Splash screen with WaddlePlay logo (color-blocks + wordmark) shown while auth resolves.
+- Splash screen with WaddlePlay logo shown while auth resolves.
 - Email/password auth (JWT). Demo: `demo@waddleplay.com / password123`.
-- **TopBar on every tab**: logo (tap → Home), notification bell (→ /notifications), settings gear (→ /settings), avatar (→ profile).
+- **TopBar on every tab**: logo, notification bell, settings gear, avatar.
+
+### Matching (with reasons)
+- Rule-based 0–100 match score + **top 3 human-readable reasons** (e.g. "outdoors", "small groups", "AAC communication", "age fits your child") returned by every playdate endpoint.
+- Reasons render as chips on Home cards and inside a "Why this is a good match" card on the playdate detail.
+
+### Playdate hosting
+- **Host a playdate** screen: title, category (5 options), location, date, start/end time, min/max age, max kids, description, sensory-friendly tag pickers, interest pickers, and a **private note** visible only to host + accepted attendees.
+
+### Saved resources
+- Bookmark toggle on every Resource card (list + featured).
+- New "Saved" chip filter on Resources with unread count badge.
+- Preview section on the Profile page showing up to 3 saved items, empty-state guide otherwise.
 
 ### 4 bottom tabs
-- **Home** — greeting, 4-tile quick-nav grid (Forum, Resources, Playdates, Explore), Nearby Playdates feed sorted by match score, trust strip.
-- **Explore** — sub-tabs **List** and **Map**. Map is a static image with absolute-positioned match-score pins (74%, 78%, 88%, 96%, 60%). Tapping a pin opens a bubble with title, host, location, match pill, **View** button → detail, and a close X.
-- **Playdates** — sub-tabs **Upcoming** and **Past** with row cards (image + age pill + confirmed badge + details).
-- **Messages** — 4 seeded threads (Sarah / James & Priya / Emma / Lisa) with unread badges. Tap → Chat interface with bubbles, "Verified" chip, send input, avatar → family profile.
+- **Home** — greeting, quick-nav grid (Forum, Resources, Playdates, Explore), Nearby Playdates feed sorted by match score, trust strip.
+- **Explore** — List + Map sub-tabs. Map = static image with match-score pins → tap for bubble → View → detail.
+- **Playdates** — Upcoming / Past sub-tabs. "+" button opens Host a playdate.
+- **Messages** — 4 seeded threads with real chat UI (send appends & clears input).
 
-### Stack (from tabs / top-bar)
-- **Playdate detail** — join / block / report, host card links to family profile.
-- **Family detail** — chips, match score, block/unblock, report.
-- **Forum** — 5 seeded discussions with topic filters + search.
-- **Resources** — 5 seeded resources with featured carousel + kind filters (Articles/Guides/Videos).
-- **Notifications** — 5 seeded items (join accepted, new match, forum reply, verification, new guide) + Mark all read.
-- **Settings** — user card + Edit, Verification, Private profile toggle, push/email toggles, Notification history, Location toggle, Language, Appearance, Blocked families, Report activity, Community guidelines, Help, Sign out.
-- **Profile edit** — parent name, location, bio, communication style, and multi-select chips for sensory prefs, interests, family values. Saves via `PUT /api/profile/me`.
+### Stack destinations
+Playdate detail (with match reasons + private note + join/block/report), Family detail, Forum, Resources, Notifications, Settings, Profile edit, Playdate create.
 
 ## Backend endpoints (all under /api)
 - Auth: `POST /auth/signup`, `POST /auth/login`, `GET /auth/me`
 - Profile: `GET/PUT /profile/me`
-- Playdates: `GET /playdates`, `GET /playdates/{id}`, `POST /playdates/{id}/join`
+- Playdates: `GET /playdates`, `GET /playdates/{id}` (with match_reasons + guarded private_note), `POST /playdates` (create with private_note), `POST /playdates/{id}/join`
 - Families: `GET /families/{id}`
 - Safety: `POST /safety/block`, `POST /safety/unblock`, `POST /safety/report`
 - Forum: `GET /forum`, `GET /forum/{id}`
-- Resources: `GET /resources`
+- Resources: `GET /resources` (with saved flag), `POST /resources/{id}/save`, `POST /resources/{id}/unsave`, `GET /profile/saved-resources`
 - Threads: `GET /threads`, `GET /threads/{id}`, `POST /threads/{id}/messages`
 - Notifications: `GET /notifications`, `POST /notifications/read-all`
 

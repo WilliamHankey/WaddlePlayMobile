@@ -67,6 +67,30 @@ export default function PlaydateDetail() {
           <View style={styles.metaRow}><Icon name="clock" size={16} color={colors.muted} /><Text style={styles.metaText}>{data.start_time} – {data.end_time}</Text></View>
           <View style={styles.metaRow}><Icon name="users" size={16} color={colors.muted} /><Text style={styles.metaText}>{(data.attendee_family_ids || []).length} / {data.max_children} families</Text></View>
 
+          {data.match_reasons && data.match_reasons.length > 0 && (
+            <View style={styles.reasonsCard} testID="playdate-reasons">
+              <View style={styles.reasonsHeader}>
+                <Icon name="check-circle" size={16} color={colors.brandPrimary} />
+                <Text style={styles.reasonsTitle}>Why this is a good match</Text>
+              </View>
+              <View style={styles.reasonChipsRow}>
+                {data.match_reasons.map((r: string) => (
+                  <View key={r} style={styles.reasonPill}><Text style={styles.reasonPillText}>{r}</Text></View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {data.private_note ? (
+            <View style={styles.privateCard} testID="playdate-private-note">
+              <View style={styles.reasonsHeader}>
+                <Icon name="lock" size={14} color={colors.brandPrimary} />
+                <Text style={styles.privateTitle}>Private note from host</Text>
+              </View>
+              <Text style={styles.privateBody}>{data.private_note}</Text>
+            </View>
+          ) : null}
+
           <Text style={styles.section}>About this playdate</Text>
           <Text style={styles.description}>{data.description}</Text>
 
@@ -189,4 +213,13 @@ const styles = StyleSheet.create({
   textArea: { minHeight: 100, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, color: colors.onSurface, textAlignVertical: "top" },
   modalRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg },
   modalBtn: { flex: 1, height: 48, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
+  reasonsCard: { marginTop: spacing.xl, backgroundColor: colors.surfaceTertiary, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.brandPrimary },
+  reasonsHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
+  reasonsTitle: { fontWeight: "700", color: colors.brandPrimary, fontSize: 13, textTransform: "uppercase", letterSpacing: 0.3 },
+  reasonChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  reasonPill: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.brandPrimary, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
+  reasonPillText: { color: colors.brandPrimary, fontWeight: "600", fontSize: 12 },
+  privateCard: { marginTop: spacing.md, backgroundColor: colors.brandSecondary, borderRadius: radius.lg, padding: spacing.md },
+  privateTitle: { fontWeight: "700", color: colors.onBrandSecondary, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.3 },
+  privateBody: { color: colors.onBrandSecondary, marginTop: 4, lineHeight: 20 },
 });

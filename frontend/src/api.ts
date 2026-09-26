@@ -62,6 +62,7 @@ export const PlaydatesAPI = {
   },
   get: (id: string) => api(`/playdates/${id}`),
   join: (id: string) => api(`/playdates/${id}/join`, { method: "POST" }),
+  create: (body: any) => api("/playdates", { method: "POST", body: JSON.stringify(body) }),
 };
 
 export const FamilyAPI = {
@@ -81,6 +82,9 @@ export const ForumAPI = {
 
 export const ResourcesAPI = {
   list: () => api("/resources"),
+  save: (id: string) => api(`/resources/${id}/save`, { method: "POST" }),
+  unsave: (id: string) => api(`/resources/${id}/unsave`, { method: "POST" }),
+  saved: () => api("/profile/saved-resources"),
 };
 
 export const ThreadsAPI = {

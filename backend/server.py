@@ -156,33 +156,53 @@ async def current_user(
 
 
 # --------------------------- Matching ---------------------------
-def match_score(family: dict, playdate: dict, host: Optional[dict]) -> int:
-    """Rule-based score 0-100 based on shared traits."""
+def match_details(family: dict, playdate: dict, host: Optional[dict]) -> tuple[int, list[str]]:
+    """Rule-based score 0-100 plus a list of human-readable match reasons."""
     score = 40  # baseline for verified family
+    reasons: list[str] = []
 
-    def overlap(a: list, b: list) -> int:
+    def shared(a: list, b: list) -> list:
         if not a or not b:
-            return 0
-        return len(set(a) & set(b))
+            return []
+        return sorted(set(a) & set(b))
 
-    # Sensory preferences overlap with playdate tags
-    score += min(20, overlap(family.get("sensory_preferences", []), playdate.get("sensory_friendly_tags", [])) * 7)
-    # Interests overlap
-    score += min(20, overlap(family.get("interests", []), playdate.get("interests", [])) * 6)
+    sensory_hits = shared(family.get("sensory_preferences", []), playdate.get("sensory_friendly_tags", []))
+    if sensory_hits:
+        score += min(20, len(sensory_hits) * 7)
+        reasons.extend(sensory_hits[:2])
+
+    interest_hits = shared(family.get("interests", []), playdate.get("interests", []))
+    if interest_hits:
+        score += min(20, len(interest_hits) * 6)
+        reasons.extend(interest_hits[:2])
 
     if host:
-        # Values with host
-        score += min(10, overlap(family.get("family_values", []), host.get("family_values", [])) * 4)
-        # Communication style match
+        value_hits = shared(family.get("family_values", []), host.get("family_values", []))
+        if value_hits:
+            score += min(10, len(value_hits) * 4)
+            reasons.append(value_hits[0])
         if family.get("communication_style") and family["communication_style"] == host.get("communication_style"):
             score += 10
+            reasons.append(f"{family['communication_style']} communication")
 
-    # Age fit: does family have a kid in the age range?
     ages = [c.get("age", 0) for c in family.get("children", [])]
     if any(playdate.get("age_min", 0) <= a <= playdate.get("age_max", 99) for a in ages):
         score += 10
+        reasons.append("age fits your child")
 
-    return max(0, min(100, score))
+    # Dedupe preserving order
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for r in reasons:
+        if r and r not in seen:
+            seen.add(r)
+            deduped.append(r)
+
+    return max(0, min(100, score)), deduped[:3]
+
+
+def match_score(family: dict, playdate: dict, host: Optional[dict]) -> int:
+    return match_details(family, playdate, host)[0]
 
 
 # --------------------------- Endpoints ---------------------------
@@ -284,7 +304,7 @@ async def list_playdates(
         if age_max is not None and p["age_min"] > age_max:
             continue
         host = await db.families.find_one({"id": p["host_family_id"]}, {"_id": 0})
-        p["match_score"] = match_score(my_fam, p, host)
+        p["match_score"], p["match_reasons"] = match_details(my_fam, p, host)
         p["host_verified"] = bool(host and host.get("verified"))
         out.append(p)
     out.sort(key=lambda x: x["match_score"], reverse=True)
@@ -298,10 +318,13 @@ async def get_playdate(playdate_id: str, user=Depends(current_user)):
         raise HTTPException(status_code=404, detail="Playdate not found")
     my_fam = await db.families.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
     host = await db.families.find_one({"id": p["host_family_id"]}, {"_id": 0})
-    p["match_score"] = match_score(my_fam, p, host)
+    p["match_score"], p["match_reasons"] = match_details(my_fam, p, host)
     p["host_verified"] = bool(host and host.get("verified"))
     p["host"] = host
     p["joined"] = user["id"] in p.get("attendee_family_ids", [])
+    # Only reveal private_note to host or joined attendees
+    if user["id"] != p.get("host_family_id") and user["id"] not in p.get("attendee_family_ids", []):
+        p.pop("private_note", None)
     return p
 
 
@@ -326,6 +349,65 @@ async def join_playdate(playdate_id: str, user=Depends(current_user)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     return {"status": "requested"}
+
+
+CATEGORY_IMAGES = {
+    "soccer": "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800",
+    "art": "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800",
+    "park": "https://images.unsplash.com/photo-1471421298428-1a04ad715e18?w=800",
+    "music": "https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800",
+    "sensory": "https://images.unsplash.com/photo-1547621869-13698ff2c2f3?w=800",
+}
+
+
+class CreatePlaydate(BaseModel):
+    title: str
+    category: str
+    location: str
+    date: str
+    start_time: str
+    end_time: str
+    age_min: int
+    age_max: int
+    description: str = ""
+    sensory_friendly_tags: List[str] = []
+    interests: List[str] = []
+    max_children: int = 6
+    private_note: Optional[str] = None
+
+
+@api.post("/playdates")
+async def create_playdate(body: CreatePlaydate, user=Depends(current_user)):
+    fam = await db.families.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not fam:
+        raise HTTPException(status_code=400, detail="Complete your profile first")
+    new_id = f"pd-{uuid.uuid4().hex[:8]}"
+    doc = {
+        "id": new_id,
+        "host_family_id": user["id"],
+        "host_name": fam.get("parent_name", "Host"),
+        "title": body.title,
+        "category": body.category,
+        "image_url": CATEGORY_IMAGES.get(body.category, CATEGORY_IMAGES["park"]),
+        "location": body.location,
+        "date": body.date,
+        "start_time": body.start_time,
+        "end_time": body.end_time,
+        "age_range": f"{body.age_min}-{body.age_max} years",
+        "age_min": body.age_min,
+        "age_max": body.age_max,
+        "description": body.description,
+        "sensory_friendly_tags": body.sensory_friendly_tags,
+        "interests": body.interests,
+        "attendee_family_ids": [],
+        "attendees_avatars": [],
+        "max_children": max(2, min(20, body.max_children)),
+        "private_note": (body.private_note or "").strip() or None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.playdates.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
 
 
 @api.get("/families/{family_id}")
@@ -392,6 +474,43 @@ async def get_forum_post(post_id: str, user=Depends(current_user)):
 @api.get("/resources")
 async def list_resources(user=Depends(current_user)):
     items = await db.resources.find({}, {"_id": 0}).to_list(200)
+    saved = await db.saved_resources.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)
+    saved_ids = {s["resource_id"] for s in saved}
+    for i in items:
+        i["saved"] = i["id"] in saved_ids
+    return items
+
+
+@api.post("/resources/{resource_id}/save")
+async def save_resource(resource_id: str, user=Depends(current_user)):
+    r = await db.resources.find_one({"id": resource_id})
+    if not r:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    await db.saved_resources.update_one(
+        {"user_id": user["id"], "resource_id": resource_id},
+        {"$setOnInsert": {"user_id": user["id"], "resource_id": resource_id, "saved_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"status": "saved"}
+
+
+@api.post("/resources/{resource_id}/unsave")
+async def unsave_resource(resource_id: str, user=Depends(current_user)):
+    await db.saved_resources.delete_one({"user_id": user["id"], "resource_id": resource_id})
+    return {"status": "unsaved"}
+
+
+@api.get("/profile/saved-resources")
+async def my_saved_resources(user=Depends(current_user)):
+    saved = await db.saved_resources.find({"user_id": user["id"]}, {"_id": 0}).sort("saved_at", -1).to_list(500)
+    ids = [s["resource_id"] for s in saved]
+    if not ids:
+        return []
+    items = await db.resources.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)
+    order = {rid: idx for idx, rid in enumerate(ids)}
+    items.sort(key=lambda r: order.get(r["id"], 999))
+    for i in items:
+        i["saved"] = True
     return items
 
 

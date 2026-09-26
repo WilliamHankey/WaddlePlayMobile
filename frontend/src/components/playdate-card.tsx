@@ -55,6 +55,18 @@ export function PlaydateCard({ item, onPress, onJoin, testID }: { item: any; onP
         <View style={styles.metaRow}><Icon name="calendar" size={14} color={colors.muted} /><Text style={styles.metaText}>{item.date}</Text></View>
         <View style={styles.metaRow}><Icon name="clock" size={14} color={colors.muted} /><Text style={styles.metaText}>{item.start_time} – {item.end_time}</Text></View>
 
+        {item.match_reasons && item.match_reasons.length > 0 && (
+          <View style={styles.reasonsRow} testID={`${testID}-reasons`}>
+            <Icon name="check-circle" size={12} color={colors.brandPrimary} />
+            <Text style={styles.reasonsLabel}>Why it matches:</Text>
+            <View style={styles.reasonChips}>
+              {item.match_reasons.slice(0, 3).map((r: string) => (
+                <View key={r} style={styles.reasonChip}><Text style={styles.reasonChipText}>{r}</Text></View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {onJoin && (
           <View style={styles.footer}>
             <Pressable testID={`${testID}-join`} style={[styles.joinBtn, { backgroundColor: btnBg }]} onPress={onJoin} disabled={joined}>
@@ -91,4 +103,9 @@ const styles = StyleSheet.create({
   joinBtn: { flex: 1, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
   joinText: { fontSize: 14, fontWeight: "700" },
   bookmark: { width: 44, height: 44, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  reasonsRow: { marginTop: spacing.sm, backgroundColor: colors.surfaceTertiary, padding: spacing.sm, borderRadius: radius.md, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
+  reasonsLabel: { fontSize: 11, fontWeight: "700", color: colors.brandPrimary, textTransform: "uppercase", letterSpacing: 0.3 },
+  reasonChips: { flexDirection: "row", flexWrap: "wrap", gap: 4, flex: 1 },
+  reasonChip: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.brandPrimary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill },
+  reasonChipText: { color: colors.brandPrimary, fontSize: 11, fontWeight: "600" },
 });
