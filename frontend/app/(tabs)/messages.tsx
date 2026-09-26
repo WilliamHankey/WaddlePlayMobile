@@ -32,21 +32,30 @@ export default function Messages() {
             <Text style={styles.emptyTitle}>No messages yet</Text>
             <Text style={styles.emptyText}>Request to join a playdate to start chatting.</Text>
           </View>
-        ) : (data || []).map((t: any) => (
-          <Pressable key={t.id} style={styles.row} testID={`thread-${t.id}`} onPress={() => router.push(`/messages/${t.id}`)}>
-            <Image source={{ uri: t.avatar_url }} style={styles.avatar} contentFit="cover" />
-            <View style={{ flex: 1 }}>
-              <View style={styles.rowHead}>
-                <Text style={styles.name}>{t.name}</Text>
-                <Text style={styles.time}>{t.at}</Text>
+        ) : (data || []).map((t: any) => {
+          const isIncomingReq = t.status === "requested" && !t.is_initiator;
+          const isOutgoingReq = t.status === "requested" && t.is_initiator;
+          return (
+            <Pressable key={t.id} style={styles.row} testID={`thread-${t.id}`} onPress={() => router.push(`/messages/${t.id}`)}>
+              <Image source={{ uri: t.avatar_url }} style={styles.avatar} contentFit="cover" />
+              <View style={{ flex: 1 }}>
+                <View style={styles.rowHead}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.name}>{t.name}</Text>
+                    {isIncomingReq && <View style={styles.reqTag}><Text style={styles.reqTagText}>New request</Text></View>}
+                    {isOutgoingReq && <View style={styles.pendingTag}><Text style={styles.pendingTagText}>Pending</Text></View>}
+                    {t.status === "declined" && <View style={styles.declinedTag}><Text style={styles.declinedTagText}>Declined</Text></View>}
+                  </View>
+                  <Text style={styles.time}>{t.at}</Text>
+                </View>
+                <View style={styles.rowFoot}>
+                  <Text style={[styles.preview, t.unread > 0 && { color: colors.onSurface, fontWeight: "600" }]} numberOfLines={1}>{t.last}</Text>
+                  {t.unread > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{t.unread}</Text></View>}
+                </View>
               </View>
-              <View style={styles.rowFoot}>
-                <Text style={[styles.preview, t.unread > 0 && { color: colors.onSurface, fontWeight: "600" }]} numberOfLines={1}>{t.last}</Text>
-                {t.unread > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{t.unread}</Text></View>}
-              </View>
-            </View>
-          </Pressable>
-        ))}
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -70,4 +79,11 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", padding: spacing.xxl, gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: colors.onSurface },
   emptyText: { color: colors.muted, textAlign: "center" },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+  reqTag: { backgroundColor: colors.brandPrimary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill },
+  reqTagText: { color: colors.onBrandPrimary, fontSize: 10, fontWeight: "700" },
+  pendingTag: { backgroundColor: colors.brandSecondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill },
+  pendingTagText: { color: colors.onBrandSecondary, fontSize: 10, fontWeight: "700" },
+  declinedTag: { backgroundColor: colors.surfaceTertiary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill },
+  declinedTagText: { color: colors.error, fontSize: 10, fontWeight: "700" },
 });

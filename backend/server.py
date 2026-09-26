@@ -322,6 +322,22 @@ async def get_playdate(playdate_id: str, user=Depends(current_user)):
     p["host_verified"] = bool(host and host.get("verified"))
     p["host"] = host
     p["joined"] = user["id"] in p.get("attendee_family_ids", [])
+    p["is_host"] = user["id"] == p.get("host_family_id")
+
+    # Compute request status for this user (host has None)
+    if p["is_host"]:
+        p["request_status"] = "host"
+        pending_count = await db.join_requests.count_documents({"playdate_id": playdate_id, "status": "pending"})
+        p["pending_requests_count"] = pending_count
+    elif p["joined"]:
+        p["request_status"] = "approved"
+    else:
+        existing = await db.join_requests.find_one(
+            {"playdate_id": playdate_id, "user_id": user["id"]},
+            sort=[("created_at", -1)],
+        )
+        p["request_status"] = existing["status"] if existing else "none"
+
     # Only reveal private_note to host or joined attendees
     if user["id"] != p.get("host_family_id") and user["id"] not in p.get("attendee_family_ids", []):
         p.pop("private_note", None)
@@ -333,14 +349,15 @@ async def join_playdate(playdate_id: str, user=Depends(current_user)):
     p = await db.playdates.find_one({"id": playdate_id})
     if not p:
         raise HTTPException(status_code=404, detail="Playdate not found")
+    if user["id"] == p.get("host_family_id"):
+        raise HTTPException(status_code=400, detail="You are the host of this playdate")
     if user["id"] in p.get("attendee_family_ids", []):
         return {"status": "already_joined"}
     if len(p.get("attendee_family_ids", [])) >= p.get("max_children", 8):
         raise HTTPException(status_code=400, detail="Playdate is full")
-    await db.playdates.update_one(
-        {"id": playdate_id},
-        {"$push": {"attendee_family_ids": user["id"]}},
-    )
+    existing = await db.join_requests.find_one({"playdate_id": playdate_id, "user_id": user["id"], "status": "pending"})
+    if existing:
+        return {"status": "already_pending"}
     await db.join_requests.insert_one({
         "id": str(uuid.uuid4()),
         "playdate_id": playdate_id,
@@ -349,6 +366,61 @@ async def join_playdate(playdate_id: str, user=Depends(current_user)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     return {"status": "requested"}
+
+
+@api.get("/playdates/{playdate_id}/requests")
+async def list_playdate_requests(playdate_id: str, user=Depends(current_user)):
+    p = await db.playdates.find_one({"id": playdate_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Playdate not found")
+    if user["id"] != p.get("host_family_id"):
+        raise HTTPException(status_code=403, detail="Only the host can view join requests")
+    reqs = await db.join_requests.find({"playdate_id": playdate_id, "status": "pending"}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    out = []
+    for r in reqs:
+        fam = await db.families.find_one({"id": r["user_id"]}, {"_id": 0})
+        if fam:
+            my_fam = p  # for score, use fam vs playdate
+            score, reasons = match_details(fam, p, await db.families.find_one({"id": p["host_family_id"]}, {"_id": 0}))
+            out.append({**r, "family": fam, "match_score": score, "match_reasons": reasons})
+    return out
+
+
+class DecideBody(BaseModel):
+    request_id: str
+
+
+@api.post("/playdates/{playdate_id}/requests/{request_id}/approve")
+async def approve_request(playdate_id: str, request_id: str, user=Depends(current_user)):
+    p = await db.playdates.find_one({"id": playdate_id})
+    if not p:
+        raise HTTPException(status_code=404, detail="Playdate not found")
+    if user["id"] != p.get("host_family_id"):
+        raise HTTPException(status_code=403, detail="Only the host can approve")
+    req = await db.join_requests.find_one({"id": request_id, "playdate_id": playdate_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req["status"] != "pending":
+        return {"status": req["status"]}
+    if len(p.get("attendee_family_ids", [])) >= p.get("max_children", 8):
+        raise HTTPException(status_code=400, detail="Playdate is full")
+    await db.playdates.update_one({"id": playdate_id}, {"$addToSet": {"attendee_family_ids": req["user_id"]}})
+    await db.join_requests.update_one({"id": request_id}, {"$set": {"status": "approved", "decided_at": datetime.now(timezone.utc).isoformat()}})
+    return {"status": "approved"}
+
+
+@api.post("/playdates/{playdate_id}/requests/{request_id}/decline")
+async def decline_request(playdate_id: str, request_id: str, user=Depends(current_user)):
+    p = await db.playdates.find_one({"id": playdate_id})
+    if not p:
+        raise HTTPException(status_code=404, detail="Playdate not found")
+    if user["id"] != p.get("host_family_id"):
+        raise HTTPException(status_code=403, detail="Only the host can decline")
+    await db.join_requests.update_one(
+        {"id": request_id, "playdate_id": playdate_id},
+        {"$set": {"status": "declined", "decided_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"status": "declined"}
 
 
 CATEGORY_IMAGES = {
@@ -516,7 +588,16 @@ async def my_saved_resources(user=Depends(current_user)):
 
 @api.get("/threads")
 async def list_threads(user=Depends(current_user)):
+    # A thread is visible to its participants; seeded threads use the demo user.
     items = await db.threads.find({}, {"_id": 0}).to_list(200)
+    # Ensure status default for legacy seeded threads
+    for t in items:
+        t.setdefault("status", "active")
+        t.setdefault("initiator_id", None)
+        # Compute a display "role" for the current user
+        t["is_initiator"] = t.get("initiator_id") == user["id"]
+    # Sort: incoming requests first, then active
+    items.sort(key=lambda t: (0 if (t["status"] == "requested" and not t["is_initiator"]) else 1 if t["status"] == "requested" else 2))
     return items
 
 
@@ -525,6 +606,9 @@ async def get_thread(thread_id: str, user=Depends(current_user)):
     t = await db.threads.find_one({"id": thread_id}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Thread not found")
+    t.setdefault("status", "active")
+    t.setdefault("initiator_id", None)
+    t["is_initiator"] = t.get("initiator_id") == user["id"]
     return t
 
 
@@ -534,6 +618,13 @@ class SendMessage(BaseModel):
 
 @api.post("/threads/{thread_id}/messages")
 async def send_message(thread_id: str, body: SendMessage, user=Depends(current_user)):
+    t = await db.threads.find_one({"id": thread_id})
+    if not t:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    if t.get("status") == "requested":
+        raise HTTPException(status_code=400, detail="Waiting for the other family to accept your chat request")
+    if t.get("status") == "declined":
+        raise HTTPException(status_code=400, detail="This chat request was declined")
     now = datetime.now(timezone.utc).strftime("%H:%M")
     msg = {"from": "me", "text": body.text, "at": now}
     await db.threads.update_one(
@@ -541,6 +632,63 @@ async def send_message(thread_id: str, body: SendMessage, user=Depends(current_u
         {"$push": {"messages": msg}, "$set": {"last": body.text, "at": now, "unread": 0}},
     )
     return {"status": "sent", "message": msg}
+
+
+class ChatRequestBody(BaseModel):
+    target_family_id: str
+    opening_message: str
+
+
+@api.post("/threads/request")
+async def request_chat(body: ChatRequestBody, user=Depends(current_user)):
+    fam = await db.families.find_one({"id": body.target_family_id}, {"_id": 0})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    if body.target_family_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot message yourself")
+    # Reuse existing thread if there is one
+    existing = await db.threads.find_one({"family_id": body.target_family_id, "initiator_id": user["id"]}, {"_id": 0})
+    if existing:
+        return {"status": "exists", "thread_id": existing["id"]}
+    new_id = f"th-{uuid.uuid4().hex[:10]}"
+    now = datetime.now(timezone.utc).strftime("%H:%M")
+    doc = {
+        "id": new_id,
+        "family_id": body.target_family_id,
+        "name": fam.get("parent_name", "Family"),
+        "avatar_url": fam.get("avatar_url"),
+        "last": body.opening_message,
+        "at": now,
+        "unread": 0,
+        "status": "requested",
+        "initiator_id": user["id"],
+        "messages": [{"from": "me", "text": body.opening_message, "at": now}],
+    }
+    await db.threads.insert_one(doc)
+    doc.pop("_id", None)
+    return {"status": "requested", "thread_id": new_id, "thread": doc}
+
+
+@api.post("/threads/{thread_id}/accept")
+async def accept_chat(thread_id: str, user=Depends(current_user)):
+    t = await db.threads.find_one({"id": thread_id})
+    if not t:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    if t.get("initiator_id") == user["id"]:
+        raise HTTPException(status_code=400, detail="Only the recipient can accept")
+    await db.threads.update_one({"id": thread_id}, {"$set": {"status": "active"}})
+    return {"status": "active"}
+
+
+@api.post("/threads/{thread_id}/decline")
+async def decline_chat(thread_id: str, user=Depends(current_user)):
+    t = await db.threads.find_one({"id": thread_id})
+    if not t:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    if t.get("initiator_id") == user["id"]:
+        raise HTTPException(status_code=400, detail="Only the recipient can decline")
+    await db.threads.update_one({"id": thread_id}, {"$set": {"status": "declined"}})
+    return {"status": "declined"}
 
 
 @api.get("/notifications")

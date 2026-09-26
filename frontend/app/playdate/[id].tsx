@@ -8,6 +8,44 @@ import Icon from "@react-native-vector-icons/feather";
 import { colors, spacing, radius } from "@/src/theme";
 import { PlaydatesAPI, SafetyAPI } from "@/src/api";
 
+function RequestsPanel({ playdateId }: { playdateId: string }) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["playdate-requests", playdateId], queryFn: () => PlaydatesAPI.requests(playdateId) });
+  const approve = useMutation({
+    mutationFn: (reqId: string) => PlaydatesAPI.approve(playdateId, reqId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["playdate-requests", playdateId] }); qc.invalidateQueries({ queryKey: ["playdate", playdateId] }); qc.invalidateQueries({ queryKey: ["playdates"] }); },
+  });
+  const decline = useMutation({
+    mutationFn: (reqId: string) => PlaydatesAPI.decline(playdateId, reqId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["playdate-requests", playdateId] }); qc.invalidateQueries({ queryKey: ["playdate", playdateId] }); },
+  });
+
+  if (isLoading) return null;
+  const reqs = data || [];
+  return (
+    <View style={styles.hostBox} testID="playdate-host-requests">
+      <View style={styles.reasonsHeader}>
+        <Icon name="user-check" size={14} color={colors.brandPrimary} />
+        <Text style={styles.reasonsTitle}>Join requests ({reqs.length})</Text>
+      </View>
+      {reqs.length === 0 ? (
+        <Text style={styles.privateBody}>No pending requests. New requests will appear here.</Text>
+      ) : reqs.map((r: any) => (
+        <View key={r.id} style={styles.reqRow} testID={`req-${r.id}`}>
+          <View style={styles.reqAvatar}><Text style={styles.reqAvatarText}>{(r.family?.parent_name || "F").charAt(0)}</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reqName}>{r.family?.parent_name}</Text>
+            <Text style={styles.reqMeta}>{r.match_score}% match · {(r.family?.children || []).map((c: any) => `${c.name} (${c.age})`).join(", ") || "family"}</Text>
+            {r.match_reasons?.length ? <Text style={styles.reqReasons} numberOfLines={1}>{r.match_reasons.join(" · ")}</Text> : null}
+          </View>
+          <Pressable style={styles.declineBtn} onPress={() => decline.mutate(r.id)} testID={`req-decline-${r.id}`}><Icon name="x" size={16} color={colors.error} /></Pressable>
+          <Pressable style={styles.approveBtn} onPress={() => approve.mutate(r.id)} testID={`req-approve-${r.id}`}><Icon name="check" size={16} color={colors.onBrandPrimary} /></Pressable>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function PlaydateDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -21,11 +59,11 @@ export default function PlaydateDetail() {
 
   const joinMut = useMutation({
     mutationFn: () => PlaydatesAPI.join(String(id)),
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["playdate", id] });
       qc.invalidateQueries({ queryKey: ["playdates"] });
-      setToast("Request sent!");
-      setTimeout(() => setToast(null), 2200);
+      setToast(res?.status === "already_pending" ? "You already have a pending request" : "Request sent — waiting for the host to approve");
+      setTimeout(() => setToast(null), 2600);
     },
   });
 
@@ -85,11 +123,13 @@ export default function PlaydateDetail() {
             <View style={styles.privateCard} testID="playdate-private-note">
               <View style={styles.reasonsHeader}>
                 <Icon name="lock" size={14} color={colors.brandPrimary} />
-                <Text style={styles.privateTitle}>Private note from host</Text>
+                <Text style={styles.privateTitle}>Private note {data.is_host ? "(only attendees see this)" : "from host"}</Text>
               </View>
               <Text style={styles.privateBody}>{data.private_note}</Text>
             </View>
           ) : null}
+
+          {data.is_host ? <RequestsPanel playdateId={String(id)} /> : null}
 
           <Text style={styles.section}>About this playdate</Text>
           <Text style={styles.description}>{data.description}</Text>
@@ -132,14 +172,27 @@ export default function PlaydateDetail() {
       </ScrollView>
 
       <View style={[styles.cta, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Pressable
-          testID="playdate-join"
-          style={[styles.joinBtn, data.joined && { backgroundColor: colors.muted }]}
-          onPress={() => joinMut.mutate()}
-          disabled={data.joined || joinMut.isPending}
-        >
-          {joinMut.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={styles.joinText}>{data.joined ? "Joined ✓" : "Request to Join"}</Text>}
-        </Pressable>
+        {data.is_host ? (
+          <View style={[styles.joinBtn, { backgroundColor: colors.surfaceTertiary }]}>
+            <Text style={[styles.joinText, { color: colors.onSurface }]}>You&apos;re hosting · {data.pending_requests_count || 0} pending</Text>
+          </View>
+        ) : (
+          <Pressable
+            testID="playdate-join"
+            style={[styles.joinBtn, (data.request_status === "pending") && { backgroundColor: colors.brandSecondary }, (data.joined || data.request_status === "approved") && { backgroundColor: colors.muted }, data.request_status === "declined" && { backgroundColor: colors.error }]}
+            onPress={() => joinMut.mutate()}
+            disabled={data.joined || data.request_status === "pending" || data.request_status === "approved" || data.request_status === "declined" || joinMut.isPending}
+          >
+            {joinMut.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : (
+              <Text style={[styles.joinText, data.request_status === "pending" && { color: colors.onBrandSecondary }]}>
+                {data.joined || data.request_status === "approved" ? "Joined ✓"
+                  : data.request_status === "pending" ? "Waiting for host…"
+                  : data.request_status === "declined" ? "Request declined"
+                  : "Request to Join"}
+              </Text>
+            )}
+          </Pressable>
+        )}
       </View>
 
       {toast && <View style={[styles.toast, { bottom: insets.bottom + 100 }]}><Text style={styles.toastText}>{toast}</Text></View>}
@@ -222,4 +275,13 @@ const styles = StyleSheet.create({
   privateCard: { marginTop: spacing.md, backgroundColor: colors.brandSecondary, borderRadius: radius.lg, padding: spacing.md },
   privateTitle: { fontWeight: "700", color: colors.onBrandSecondary, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.3 },
   privateBody: { color: colors.onBrandSecondary, marginTop: 4, lineHeight: 20 },
+  hostBox: { marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.brandPrimary },
+  reqRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  reqAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  reqAvatarText: { color: colors.onBrandPrimary, fontWeight: "700" },
+  reqName: { fontWeight: "700", color: colors.onSurface },
+  reqMeta: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  reqReasons: { color: colors.brandPrimary, fontSize: 11, marginTop: 2 },
+  approveBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  declineBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.error, alignItems: "center", justifyContent: "center" },
 });

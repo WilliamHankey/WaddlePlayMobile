@@ -5,13 +5,19 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
 import { colors, spacing, radius } from "@/src/theme";
-import { FamilyAPI, SafetyAPI } from "@/src/api";
+import { FamilyAPI, SafetyAPI, ThreadsAPI } from "@/src/api";
 
 function Chip({ label, tone = "primary" }: { label: string; tone?: "primary" | "secondary" | "tertiary" }) {
   const bg = tone === "primary" ? colors.brandPrimary : tone === "secondary" ? colors.brandSecondary : colors.brandTertiary;
   const fg = tone === "primary" ? colors.onBrandPrimary : tone === "secondary" ? colors.onBrandSecondary : colors.onBrandTertiary;
   return (<View style={[styles.chip, { backgroundColor: bg }]}><Text style={[styles.chipText, { color: fg }]}>{label}</Text></View>);
 }
+
+const OPENERS = [
+  "Hi! Our sensory preferences look similar — would love to chat about a possible playdate.",
+  "Hello 👋 We're new here and would love to say hi before meeting in person.",
+  "Hi! I saw your family profile and my child would really connect with yours. Open to chat?",
+];
 
 export default function FamilyDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,6 +26,8 @@ export default function FamilyDetail() {
   const qc = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatText, setChatText] = useState(OPENERS[0]);
 
   const { data, isLoading } = useQuery({ queryKey: ["family", id], queryFn: () => FamilyAPI.get(String(id)) });
 
@@ -31,6 +39,15 @@ export default function FamilyDetail() {
   const reportMut = useMutation({
     mutationFn: () => SafetyAPI.report(String(id), reason),
     onSuccess: () => { setReportOpen(false); setReason(""); },
+  });
+
+  const chatMut = useMutation({
+    mutationFn: () => ThreadsAPI.request(String(id), chatText.trim()),
+    onSuccess: (res: any) => {
+      setChatOpen(false);
+      qc.invalidateQueries({ queryKey: ["threads"] });
+      router.push(`/messages/${res.thread_id}`);
+    },
   });
 
   if (isLoading || !data) return <View style={[styles.root, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>;
@@ -49,6 +66,11 @@ export default function FamilyDetail() {
             <View style={styles.matchPill}><Icon name="star" size={14} color={colors.onBrandSecondary} /><Text style={styles.matchText}>{data.match_score}% match</Text></View>
             {data.verified && <View style={styles.verifiedPill}><Icon name="shield" size={14} color={colors.onBrandPrimary} /><Text style={styles.verifiedText}>Verified</Text></View>}
           </View>
+
+          <Pressable style={styles.sayHiBtn} onPress={() => setChatOpen(true)} testID="family-say-hi">
+            <Icon name="message-circle" size={16} color={colors.onBrandPrimary} />
+            <Text style={styles.sayHiText}>Say hi with a friendly message</Text>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -109,6 +131,30 @@ export default function FamilyDetail() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={() => setChatOpen(false)}>
+        <View style={styles.modalBg}>
+          <View style={styles.modal}>
+            <View style={styles.chatHead}>
+              <Icon name="message-circle" size={18} color={colors.brandPrimary} />
+              <Text style={styles.modalTitle}>Say hi to {data.parent_name.split(" ")[0]}</Text>
+            </View>
+            <Text style={styles.modalHint}>Pick a friendly opener — no commitment required, they choose to accept.</Text>
+            {OPENERS.map((o, i) => (
+              <Pressable key={i} style={[styles.opener, chatText === o && styles.openerActive]} onPress={() => setChatText(o)} testID={`chat-opener-${i}`}>
+                <Text style={[styles.openerText, chatText === o && { color: colors.brandPrimary }]}>{o}</Text>
+              </Pressable>
+            ))}
+            <TextInput style={[styles.textArea, { marginTop: spacing.md }]} multiline value={chatText} onChangeText={setChatText} testID="chat-request-input" placeholderTextColor={colors.muted} />
+            <View style={styles.modalRow}>
+              <Pressable style={[styles.modalBtn, { backgroundColor: colors.surfaceTertiary }]} onPress={() => setChatOpen(false)} testID="chat-request-cancel"><Text style={{ color: colors.onSurface, fontWeight: "600" }}>Cancel</Text></Pressable>
+              <Pressable style={[styles.modalBtn, { backgroundColor: colors.brandPrimary }]} onPress={() => chatMut.mutate()} disabled={!chatText.trim() || chatMut.isPending} testID="chat-request-send">
+                {chatMut.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={{ color: colors.onBrandPrimary, fontWeight: "700" }}>Send request</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -146,4 +192,11 @@ const styles = StyleSheet.create({
   textArea: { minHeight: 100, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, color: colors.onSurface, textAlignVertical: "top" },
   modalRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg },
   modalBtn: { flex: 1, height: 48, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
+  sayHiBtn: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.md },
+  sayHiText: { color: colors.onBrandPrimary, fontWeight: "700" },
+  chatHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
+  modalHint: { color: colors.muted, fontSize: 13, marginBottom: spacing.md, lineHeight: 18 },
+  opener: { backgroundColor: colors.surfaceTertiary, padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  openerActive: { borderColor: colors.brandPrimary, backgroundColor: colors.surfaceSecondary },
+  openerText: { color: colors.onSurface, fontSize: 13, lineHeight: 18 },
 });

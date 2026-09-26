@@ -63,6 +63,9 @@ export const PlaydatesAPI = {
   get: (id: string) => api(`/playdates/${id}`),
   join: (id: string) => api(`/playdates/${id}/join`, { method: "POST" }),
   create: (body: any) => api("/playdates", { method: "POST", body: JSON.stringify(body) }),
+  requests: (id: string) => api(`/playdates/${id}/requests`),
+  approve: (id: string, reqId: string) => api(`/playdates/${id}/requests/${reqId}/approve`, { method: "POST" }),
+  decline: (id: string, reqId: string) => api(`/playdates/${id}/requests/${reqId}/decline`, { method: "POST" }),
 };
 
 export const FamilyAPI = {
@@ -91,6 +94,9 @@ export const ThreadsAPI = {
   list: () => api("/threads"),
   get: (id: string) => api(`/threads/${id}`),
   send: (id: string, text: string) => api(`/threads/${id}/messages`, { method: "POST", body: JSON.stringify({ text }) }),
+  request: (target_family_id: string, opening_message: string) => api("/threads/request", { method: "POST", body: JSON.stringify({ target_family_id, opening_message }) }),
+  accept: (id: string) => api(`/threads/${id}/accept`, { method: "POST" }),
+  decline: (id: string) => api(`/threads/${id}/decline`, { method: "POST" }),
 };
 
 export const NotificationsAPI = {

@@ -26,6 +26,23 @@ export default function Chat() {
     },
   });
 
+  const acceptMut = useMutation({
+    mutationFn: () => ThreadsAPI.accept(String(id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["thread", id] });
+      qc.invalidateQueries({ queryKey: ["threads"] });
+    },
+  });
+
+  const declineMut = useMutation({
+    mutationFn: () => ThreadsAPI.decline(String(id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["thread", id] });
+      qc.invalidateQueries({ queryKey: ["threads"] });
+      router.back();
+    },
+  });
+
   useEffect(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
   }, [data]);
@@ -59,6 +76,24 @@ export default function Chat() {
       </View>
 
       <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.sm }}>
+        {data.status === "requested" && !data.is_initiator ? (
+          <View style={styles.reqBanner} testID="chat-incoming-request">
+            <Icon name="message-circle" size={18} color={colors.brandPrimary} />
+            <Text style={styles.reqText}>{data.name} wants to say hi before a playdate. Accept to open the chat.</Text>
+          </View>
+        ) : null}
+        {data.status === "requested" && data.is_initiator ? (
+          <View style={styles.pendingBanner} testID="chat-outgoing-pending">
+            <Icon name="clock" size={16} color={colors.onBrandSecondary} />
+            <Text style={styles.pendingText}>Waiting for {data.name} to accept your friendly hello.</Text>
+          </View>
+        ) : null}
+        {data.status === "declined" ? (
+          <View style={styles.declinedBanner} testID="chat-declined">
+            <Icon name="x-circle" size={16} color={colors.error} />
+            <Text style={styles.declinedText}>This chat request was declined.</Text>
+          </View>
+        ) : null}
         {(data.messages || []).map((m: any, i: number) => (
           <View key={i} style={[styles.msg, m.from === "me" ? styles.msgMine : styles.msgTheirs]}>
             <Text style={[styles.msgText, m.from === "me" && { color: colors.onBrandPrimary }]}>{m.text}</Text>
@@ -67,22 +102,35 @@ export default function Chat() {
         ))}
       </ScrollView>
 
-      <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.sm }]}>
-        <View style={styles.inputWrap}>
-          <TextInput
-            testID="chat-input"
-            style={styles.input}
-            placeholder="Write a kind message…"
-            placeholderTextColor={colors.muted}
-            value={text}
-            onChangeText={setText}
-            multiline
-          />
+      {data.status === "requested" && !data.is_initiator ? (
+        <View style={[styles.decideBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+          <Pressable style={[styles.decideBtn, styles.decideDecline]} onPress={() => declineMut.mutate()} disabled={declineMut.isPending} testID="chat-decline">
+            <Icon name="x" size={16} color={colors.error} />
+            <Text style={styles.decideDeclineText}>Decline</Text>
+          </Pressable>
+          <Pressable style={[styles.decideBtn, styles.decideAccept]} onPress={() => acceptMut.mutate()} disabled={acceptMut.isPending} testID="chat-accept">
+            {acceptMut.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : (<><Icon name="check" size={16} color={colors.onBrandPrimary} /><Text style={styles.decideAcceptText}>Accept & reply</Text></>)}
+          </Pressable>
         </View>
-        <Pressable style={styles.sendBtn} onPress={onSend} disabled={sendMut.isPending || !text.trim()} testID="chat-send">
-          <Icon name="send" size={18} color={colors.onBrandPrimary} />
-        </Pressable>
-      </View>
+      ) : data.status === "declined" ? null : (
+        <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+          <View style={styles.inputWrap}>
+            <TextInput
+              testID="chat-input"
+              style={styles.input}
+              placeholder={data.status === "requested" ? "Waiting for accept…" : "Write a kind message…"}
+              placeholderTextColor={colors.muted}
+              value={text}
+              onChangeText={setText}
+              editable={data.status !== "requested"}
+              multiline
+            />
+          </View>
+          <Pressable style={[styles.sendBtn, (sendMut.isPending || !text.trim() || data.status === "requested") && { opacity: 0.5 }]} onPress={onSend} disabled={sendMut.isPending || !text.trim() || data.status === "requested"} testID="chat-send">
+            <Icon name="send" size={18} color={colors.onBrandPrimary} />
+          </Pressable>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -105,4 +153,16 @@ const styles = StyleSheet.create({
   inputWrap: { flex: 1, backgroundColor: colors.surfaceTertiary, borderRadius: radius.lg, minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.md },
   input: { color: colors.onSurface, fontSize: 14, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  reqBanner: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.brandPrimary },
+  reqText: { flex: 1, color: colors.onSurface, fontSize: 13, lineHeight: 18 },
+  pendingBanner: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, backgroundColor: colors.brandSecondary, borderRadius: radius.md },
+  pendingText: { flex: 1, color: colors.onBrandSecondary, fontSize: 13, lineHeight: 18 },
+  declinedBanner: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.error },
+  declinedText: { flex: 1, color: colors.error, fontSize: 13, lineHeight: 18 },
+  decideBar: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.xl, paddingTop: spacing.sm, backgroundColor: colors.surfaceSecondary, borderTopWidth: 1, borderTopColor: colors.border },
+  decideBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 48, borderRadius: radius.pill },
+  decideAccept: { backgroundColor: colors.brandPrimary },
+  decideAcceptText: { color: colors.onBrandPrimary, fontWeight: "700" },
+  decideDecline: { borderWidth: 1, borderColor: colors.error, backgroundColor: colors.surfaceTertiary },
+  decideDeclineText: { color: colors.error, fontWeight: "700" },
 });

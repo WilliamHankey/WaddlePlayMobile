@@ -10,6 +10,14 @@ Waddle Play helps parents of autistic and neurodivergent children arrange safe, 
 - Email/password auth (JWT). Demo: `demo@waddleplay.com / password123`.
 - **TopBar on every tab**: logo, notification bell, settings gear, avatar.
 
+### Playdate RSVP queue
+- Joining a playdate creates a **pending request** (no auto-add). The host sees a "Join requests" panel on the playdate detail with each requester's family, match score, and top reasons.
+- Approve moves the family into attendees; decline marks the request declined. Guests see their status live: *Request to Join → Waiting for host… → Joined ✓ / Request declined*.
+
+### Family chat requests
+- Every family profile has a **"Say hi with a friendly message"** button that opens a modal with 3 friendly preset openers (editable).
+- Sending creates a thread with status=`requested`; the sender sees a *"Waiting for accept"* banner and a disabled input; the recipient sees a *"New request"* tag in the message list and Accept / Decline buttons at the bottom of the chat before the input unlocks.
+
 ### Matching (with reasons)
 - Rule-based 0–100 match score + **top 3 human-readable reasons** (e.g. "outdoors", "small groups", "AAC communication", "age fits your child") returned by every playdate endpoint.
 - Reasons render as chips on Home cards and inside a "Why this is a good match" card on the playdate detail.
@@ -34,12 +42,12 @@ Playdate detail (with match reasons + private note + join/block/report), Family 
 ## Backend endpoints (all under /api)
 - Auth: `POST /auth/signup`, `POST /auth/login`, `GET /auth/me`
 - Profile: `GET/PUT /profile/me`
-- Playdates: `GET /playdates`, `GET /playdates/{id}` (with match_reasons + guarded private_note), `POST /playdates` (create with private_note), `POST /playdates/{id}/join`
+- Playdates: `GET /playdates`, `GET /playdates/{id}` (match_reasons, guarded private_note, request_status, is_host, pending_requests_count), `POST /playdates` (create with private_note), `POST /playdates/{id}/join` (pending request), `GET /playdates/{id}/requests` (host only), `POST /playdates/{id}/requests/{req_id}/approve`, `POST /playdates/{id}/requests/{req_id}/decline`
 - Families: `GET /families/{id}`
 - Safety: `POST /safety/block`, `POST /safety/unblock`, `POST /safety/report`
 - Forum: `GET /forum`, `GET /forum/{id}`
 - Resources: `GET /resources` (with saved flag), `POST /resources/{id}/save`, `POST /resources/{id}/unsave`, `GET /profile/saved-resources`
-- Threads: `GET /threads`, `GET /threads/{id}`, `POST /threads/{id}/messages`
+- Threads: `GET /threads` (adds status + is_initiator), `GET /threads/{id}`, `POST /threads/{id}/messages` (blocked while requested), `POST /threads/request` (with opening_message), `POST /threads/{id}/accept`, `POST /threads/{id}/decline`
 - Notifications: `GET /notifications`, `POST /notifications/read-all`
 
 ## Tech
