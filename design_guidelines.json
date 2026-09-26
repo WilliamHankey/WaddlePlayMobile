@@ -1,0 +1,153 @@
+{
+  "app_name": "Waddle Play (PlayPals Connect)",
+  "personality": "3 Editorial structure with 4 Tactile / Playful surfaces",
+  "personality_one_liner": "A warm, calming, and highly trustworthy space that embraces neurodivergent families through soft structure, earthy tones, and friendly tactile elements.",
+  "color": {
+    "surface": "#F8F9FA",
+    "onSurface": "#264653",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#264653",
+    "surfaceTertiary": "#EAECEE",
+    "onSurfaceTertiary": "#264653",
+    "surfaceInverse": "#264653",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#5E876D",
+    "onBrand": "#FFFFFF",
+    "brandPrimary": "#5E876D",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#E9C46A",
+    "onBrandSecondary": "#264653",
+    "brandTertiary": "#F4A261",
+    "onBrandTertiary": "#264653",
+    "success": "#5E876D",
+    "onSuccess": "#FFFFFF",
+    "warning": "#E9C46A",
+    "onWarning": "#264653",
+    "error": "#D9534F",
+    "onError": "#FFFFFF",
+    "info": "#264653",
+    "onInfo": "#FFFFFF",
+    "border": "#EAECEE",
+    "borderStrong": "#264653",
+    "divider": "#EAECEE",
+    "muted": "#6C7A89"
+  },
+  "typography": {
+    "displayFontFamily": "Fraunces",
+    "textFontFamily": "DM Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous comfortable padding; maintain breathing room for a calming effect. Avoid dense layouts.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Feather",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [],
+    "dont's": ["Avoid glassmorphism to maintain the solid, trustworthy tactile editorial feel requested."]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "SignIn",
+      "purpose": "Welcomes users with a calming aesthetic and simple authentication options.",
+      "states": {
+        "loading": "Centered brand-colored spinner.",
+        "empty": "N/A",
+        "error": "Standard alert or inline red text for failed auth."
+      },
+      "layout": "Hero image/texture spanning the top 40% with a vertical gradient scrim blending into the surface. Bold serif 'Welcome back!' header. Stacked pill buttons for sign-in options."
+    },
+    {
+      "name": "Home",
+      "purpose": "Displays a feed of nearby playdates, emphasizing safety, matching scores, and neurodivergent-friendly environments.",
+      "states": {
+        "loading": "Skeleton loader of rounded cards.",
+        "empty": "Sage green textured empty state with a 'No playdates found' illustration and 'Create a playdate' CTA.",
+        "error": "Error message with a retry button."
+      },
+      "layout": "Header with user greeting. A trust-strip banner pinned near the bottom stating 'All families are verified'. Scrollable list of rounded soft cards. Cards feature image top, age-range pill badge overlaid in dark teal, title, circular category icons, and 'Request to Join' pill CTA at the bottom right. Bottom tabs for navigation."
+    },
+    {
+      "name": "Explore",
+      "purpose": "Allows users to filter and search playdates by specific sensory preferences, interests, and age ranges.",
+      "states": {
+        "loading": "Centered spinner.",
+        "empty": "Illustration indicating no matches for current filters.",
+        "error": "Error message with retry."
+      },
+      "layout": "Grid of category bubbles and filter chips using brand colors. Search bar at the top."
+    },
+    {
+      "name": "FamilyProfile",
+      "purpose": "Displays detailed profile of a family/child including sensory preferences, match score, and verification status.",
+      "states": {
+        "loading": "Skeleton layout.",
+        "empty": "Prompt to fill out family profile details.",
+        "error": "Fetch error with retry."
+      },
+      "layout": "Cover image at the top. Circular avatar. Prominent 'Match Score' pill. Sections for 'Sensory Preferences' and 'Interests' displayed as colored chips. Large 'Verified' trust badge. 'Block & Report' utility pinned at the bottom."
+    }
+  ],
+  "images": {
+    "hero_nature": {
+      "url": "https://images.unsplash.com/photo-1695551407214-25a5dc6300b8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwxfHxxdWlldCUyMG5hdHVyZSUyMHBhcmt8ZW58MHx8fHwxNzkwNDI2MTAzfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Quiet nature park serving as a calming hero backdrop"
+    },
+    "playdate_art": {
+      "url": "https://images.unsplash.com/photo-1609174112693-52fdcebffd89?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwxfHxraWRzJTIwcGFpbnRpbmclMjBhcnQlMjBjbGFzc3xlbnwwfHx8fDE3OTA0MjYxMDN8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Kids participating in a quiet art class"
+    },
+    "playdate_gym": {
+      "url": "https://images.unsplash.com/photo-1759330203240-b89ccee8840f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxpbmRvb3IlMjBwbGF5Z3JvdW5kfGVufDB8fHx8MTc5MDQyNjEwOHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Indoor playroom and sensory gym"
+    },
+    "empty_state_texture": {
+      "url": "https://images.unsplash.com/photo-1705837861201-dd000d929a31?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwxfHxzYWdlJTIwZ3JlZW4lMjB0ZXh0dXJlfGVufDB8fHx8MTc5MDQyNjEwOHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Calming sage green texture for empty states"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the provided color palette. DO NOT introduce AI-slop purples, indigos, or generic blues. Use the dark teal (#264653) as your contrasting dark neutral for text and heavy elements.",
+    "Typography: Use Fraunces for bold, trustworthy serif headings ('Welcome back!') and DM Sans for clean, legible body text and UI labels. Ensure font weights never exceed 500.",
+    "Playdate Cards: Cards must have rounded corners (lg radius) and subtle shadows (tier 1). Playdate images should feature an overlaid age-range pill badge with a dark teal (#264653) background and white text.",
+    "Icons and Badges: Circular category icons should use the brand primary, secondary, or tertiary colors as their backgrounds. Use Feather icons for a clean, outline aesthetic (including the bookmark icon on cards).",
+    "Actions: 'Request to Join' buttons should be distinct, colored pills (using brandPrimary or brandSecondary).",
+    "Navigation: Implement 4 bottom tabs (Home, Explore, Messages, Profile). Explicitly use `NativeTabs` via Expo Router for iOS targets if supported, falling back to standard tabs.",
+    "Trust & Safety elements are key: Pin a 'All families are verified' trust strip near the bottom of the Home screen. Ensure Match Scores and Verification Badges are prominent on profiles. Always include Block & Report functionalities on user profiles.",
+    "All images used as backdrops or with text over them must use a gradient scrim (transparent to dark teal or black) to guarantee minimum WCAG AA contrast for text overlays.",
+    "Ensure Loading, Empty, and Error states are implemented gracefully across all data-fetching screens."
+  ]
+}
