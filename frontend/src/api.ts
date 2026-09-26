@@ -73,3 +73,23 @@ export const SafetyAPI = {
   unblock: (target_family_id: string) => api("/safety/unblock", { method: "POST", body: JSON.stringify({ target_family_id }) }),
   report: (target_family_id: string, reason: string) => api("/safety/report", { method: "POST", body: JSON.stringify({ target_family_id, reason }) }),
 };
+
+export const ForumAPI = {
+  list: () => api("/forum"),
+  get: (id: string) => api(`/forum/${id}`),
+};
+
+export const ResourcesAPI = {
+  list: () => api("/resources"),
+};
+
+export const ThreadsAPI = {
+  list: () => api("/threads"),
+  get: (id: string) => api(`/threads/${id}`),
+  send: (id: string, text: string) => api(`/threads/${id}/messages`, { method: "POST", body: JSON.stringify({ text }) }),
+};
+
+export const NotificationsAPI = {
+  list: () => api("/notifications"),
+  readAll: () => api("/notifications/read-all", { method: "POST" }),
+};

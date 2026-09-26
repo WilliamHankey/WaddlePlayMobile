@@ -1,11 +1,13 @@
 import React from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
 import { colors, spacing, radius } from "@/src/theme";
 import { ProfileAPI } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
+import { TopBar } from "@/src/components/top-bar";
 
 function Chip({ label, tone = "primary" }: { label: string; tone?: "primary" | "secondary" | "tertiary" }) {
   const bg = tone === "primary" ? colors.brandPrimary : tone === "secondary" ? colors.brandSecondary : colors.brandTertiary;
@@ -20,6 +22,7 @@ function Chip({ label, tone = "primary" }: { label: string; tone?: "primary" | "
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
+  const router = useRouter();
   const { data: profile, isLoading } = useQuery({ queryKey: ["profile"], queryFn: ProfileAPI.getMe });
 
   if (isLoading || !profile) {
@@ -31,7 +34,18 @@ export default function Profile() {
   }
 
   return (
-    <ScrollView style={[styles.root, { paddingTop: insets.top }]} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <TopBar />
+      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+      <View style={styles.headerRow}>
+        <Pressable style={styles.back} onPress={() => router.back()} testID="profile-back">
+          <Icon name="arrow-left" size={20} color={colors.onSurface} />
+        </Pressable>
+        <Text style={styles.headerTitle}>My family</Text>
+        <Pressable style={styles.editBtnTop} onPress={() => router.push("/profile/edit")} testID="profile-edit-top">
+          <Icon name="edit-2" size={16} color={colors.brandPrimary} />
+        </Pressable>
+      </View>
       <View style={styles.header}>
         <View style={styles.avatar}><Text style={styles.avatarText}>{(profile.parent_name || "P").charAt(0)}</Text></View>
         <View style={{ flex: 1 }}>
@@ -102,12 +116,17 @@ export default function Profile() {
         <Icon name="log-out" size={18} color={colors.error} />
         <Text style={styles.signoutText}>Sign out</Text>
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md },
+  back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
+  editBtnTop: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.brandPrimary },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.lg, paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xl },
   avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   avatarText: { color: colors.onBrandPrimary, fontSize: 28, fontWeight: "700" },

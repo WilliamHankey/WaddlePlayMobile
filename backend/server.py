@@ -375,6 +375,67 @@ async def report(body: ReportBody, user=Depends(current_user)):
     return {"status": "reported"}
 
 
+@api.get("/forum")
+async def list_forum(user=Depends(current_user)):
+    posts = await db.forum_posts.find({}, {"_id": 0}).sort("hours_ago", 1).to_list(200)
+    return posts
+
+
+@api.get("/forum/{post_id}")
+async def get_forum_post(post_id: str, user=Depends(current_user)):
+    p = await db.forum_posts.find_one({"id": post_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return p
+
+
+@api.get("/resources")
+async def list_resources(user=Depends(current_user)):
+    items = await db.resources.find({}, {"_id": 0}).to_list(200)
+    return items
+
+
+@api.get("/threads")
+async def list_threads(user=Depends(current_user)):
+    items = await db.threads.find({}, {"_id": 0}).to_list(200)
+    return items
+
+
+@api.get("/threads/{thread_id}")
+async def get_thread(thread_id: str, user=Depends(current_user)):
+    t = await db.threads.find_one({"id": thread_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return t
+
+
+class SendMessage(BaseModel):
+    text: str
+
+
+@api.post("/threads/{thread_id}/messages")
+async def send_message(thread_id: str, body: SendMessage, user=Depends(current_user)):
+    now = datetime.now(timezone.utc).strftime("%H:%M")
+    msg = {"from": "me", "text": body.text, "at": now}
+    await db.threads.update_one(
+        {"id": thread_id},
+        {"$push": {"messages": msg}, "$set": {"last": body.text, "at": now, "unread": 0}},
+    )
+    return {"status": "sent", "message": msg}
+
+
+@api.get("/notifications")
+async def list_notifications(user=Depends(current_user)):
+    items = await db.notifications.find({}, {"_id": 0}).to_list(200)
+    return items
+
+
+@api.post("/notifications/read-all")
+async def mark_all_read(user=Depends(current_user)):
+    await db.notifications.update_many({}, {"$set": {"unread": False}})
+    return {"status": "ok"}
+
+
 # --------------------------- Seed data ---------------------------
 SEED_FAMILIES = [
     {
@@ -464,6 +525,52 @@ SEED_FAMILIES = [
         "verified": True,
         "children": [{"name": "Amara", "age": 7, "diagnosis": "Autism", "sensory_preferences": ["quiet"], "interests": ["hiking"], "communication_style": "verbal"}],
     },
+]
+
+SEED_FORUM = [
+    {"id": "fp-1", "author_id": "fam-sarah", "author_name": "Sarah M.", "avatar_url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100", "topic": "Parenting", "title": "Best outdoor activities for 4-6 year olds", "body": "Looking for calm outdoor spaces in Cape Town that work well for a sensory-sensitive 5yo. What are your favourite quiet parks?", "replies": 24, "hours_ago": 2},
+    {"id": "fp-2", "author_id": "fam-james", "author_name": "James N.", "avatar_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100", "topic": "Parenting", "title": "How do you manage screen time on weekends?", "body": "Our ADHD 6yo struggles with transitions off screens. What works for your family?", "replies": 18, "hours_ago": 5},
+    {"id": "fp-3", "author_id": "fam-lisa", "author_name": "Lisa B.", "avatar_url": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100", "topic": "Activities", "title": "Looking for art class recommendations in Cape Town", "body": "Anyone know of neurodiversity-affirming art classes for 6-year-olds?", "replies": 12, "hours_ago": 24},
+    {"id": "fp-4", "author_id": "fam-emma", "author_name": "Emma vdM", "avatar_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100", "topic": "Local", "title": "AAC-friendly speech therapist recommendations", "body": "Our SLP is moving overseas. Any recs for AAC-savvy therapists in the Southern Suburbs?", "replies": 9, "hours_ago": 30},
+    {"id": "fp-5", "author_id": "fam-tom", "author_name": "Tom A.", "avatar_url": "https://images.unsplash.com/photo-1520975916090-3105956dac38?w=100", "topic": "General", "title": "Music therapy vs sensory playgroups — thoughts?", "body": "Trying to decide between weekly music therapy and a sensory playgroup. Would love to hear experiences.", "replies": 7, "hours_ago": 48},
+]
+
+SEED_RESOURCES = [
+    {"id": "rs-1", "kind": "article", "title": "10 outdoor games kids will never get tired of", "image_url": "https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=600", "read_minutes": 5, "featured": True, "summary": "Ideas to keep kids engaged and learning at home and outdoors."},
+    {"id": "rs-2", "kind": "guide", "title": "Positive parenting tips that really work", "image_url": "https://images.unsplash.com/photo-1607453998774-d533f65dac99?w=600", "read_minutes": 7, "featured": False, "summary": "Compassionate, evidence-based approaches to daily challenges."},
+    {"id": "rs-3", "kind": "video", "title": "Finding the right activities for your child", "image_url": "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=600", "read_minutes": 12, "featured": False, "summary": "A short video guide for choosing sensory-appropriate activities."},
+    {"id": "rs-4", "kind": "guide", "title": "Preparing your child for a first playdate", "image_url": "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=600", "read_minutes": 6, "featured": True, "summary": "A calm, step-by-step way to reduce first-playdate anxiety."},
+    {"id": "rs-5", "kind": "article", "title": "Understanding sensory profiles: a parent primer", "image_url": "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=600", "read_minutes": 8, "featured": False, "summary": "What sensory-seeking vs. sensory-avoiding means in daily life."},
+]
+
+SEED_THREADS = [
+    {"id": "th-sarah", "family_id": "fam-sarah", "name": "Sarah Mitchell", "avatar_url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200", "last": "Leo would love the nature walk on Saturday! What do you usually bring?", "at": "10:24", "unread": 2, "messages": [
+        {"from": "them", "text": "Hi! Saw your request for the Quiet Nature Walk — welcome 💚", "at": "Mon 09:12"},
+        {"from": "me", "text": "Thanks so much! Leo is really excited. Anything he should bring?", "at": "Mon 09:15"},
+        {"from": "them", "text": "Just a water bottle and something for the sun. We keep it very small (max 4 kids) so it stays calm.", "at": "Mon 09:20"},
+        {"from": "them", "text": "Leo would love the nature walk on Saturday! What do you usually bring?", "at": "10:24"},
+    ]},
+    {"id": "th-james", "family_id": "fam-james", "name": "James & Priya", "avatar_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200", "last": "Perfect — see you at 10 at Green Point Park 🙌", "at": "Yesterday", "unread": 0, "messages": [
+        {"from": "me", "text": "Hi! Just confirming the soccer playdate on Sat.", "at": "Sun 14:00"},
+        {"from": "them", "text": "Yes we&apos;re on! Aarav can&apos;t wait.", "at": "Sun 14:12"},
+        {"from": "them", "text": "Perfect — see you at 10 at Green Point Park 🙌", "at": "Yesterday"},
+    ]},
+    {"id": "th-emma", "family_id": "fam-emma", "name": "Emma van der Merwe", "avatar_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", "last": "Zoe uses AAC — I&apos;ll bring her device 🙂", "at": "Tue", "unread": 0, "messages": [
+        {"from": "them", "text": "Hi 👋 We&apos;d love to join the art playdate!", "at": "Tue 11:02"},
+        {"from": "them", "text": "Zoe uses AAC — I&apos;ll bring her device 🙂", "at": "Tue 11:05"},
+    ]},
+    {"id": "th-lisa", "family_id": "fam-lisa", "name": "Lisa Botha", "avatar_url": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200", "last": "The twins are excited — see you Wednesday!", "at": "Sat", "unread": 1, "messages": [
+        {"from": "them", "text": "Hi! Mia and Eva would love to join.", "at": "Sat 08:30"},
+        {"from": "them", "text": "The twins are excited — see you Wednesday!", "at": "Sat 08:32"},
+    ]},
+]
+
+SEED_NOTIFICATIONS = [
+    {"id": "nt-1", "kind": "playdate_join", "title": "Sarah accepted your join request", "body": "Quiet Nature Walk on Sat 14 Jun is confirmed.", "at": "10 min ago", "unread": True, "icon": "check-circle"},
+    {"id": "nt-2", "kind": "match", "title": "New 96% match nearby", "body": "Sarah&apos;s family shares 4 sensory preferences with you.", "at": "1 hr ago", "unread": True, "icon": "star"},
+    {"id": "nt-3", "kind": "forum", "title": "New reply on your discussion", "body": "James replied to \"Best outdoor activities…\"", "at": "3 hr ago", "unread": False, "icon": "message-circle"},
+    {"id": "nt-4", "kind": "safety", "title": "Community verification complete", "body": "Your family profile is now verified.", "at": "Yesterday", "unread": False, "icon": "shield"},
+    {"id": "nt-5", "kind": "resource", "title": "New guide for you", "body": "Preparing your child for a first playdate.", "at": "2 d ago", "unread": False, "icon": "book-open"},
 ]
 
 SEED_PLAYDATES = [
@@ -588,6 +695,14 @@ async def seed_data():
         await db.families.update_one({"id": fam["id"]}, {"$setOnInsert": fam}, upsert=True)
     for pd in SEED_PLAYDATES:
         await db.playdates.update_one({"id": pd["id"]}, {"$setOnInsert": pd}, upsert=True)
+    for fp in SEED_FORUM:
+        await db.forum_posts.update_one({"id": fp["id"]}, {"$setOnInsert": fp}, upsert=True)
+    for rs in SEED_RESOURCES:
+        await db.resources.update_one({"id": rs["id"]}, {"$setOnInsert": rs}, upsert=True)
+    for th in SEED_THREADS:
+        await db.threads.update_one({"id": th["id"]}, {"$setOnInsert": th}, upsert=True)
+    for nt in SEED_NOTIFICATIONS:
+        await db.notifications.update_one({"id": nt["id"]}, {"$setOnInsert": nt}, upsert=True)
     # Seed demo user
     demo_email = "demo@waddleplay.com"
     if not await db.users.find_one({"email": demo_email}):
