@@ -79,7 +79,7 @@ jobs:
           fi
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           mkdir -p "$HOME/.gradle"
-                  {
+          {
             echo "WADDLEPLAY_STORE_FILE=$RUNNER_TEMP/release.keystore"
             echo "WADDLEPLAY_STORE_PASSWORD=$STORE_PASSWORD"
             echo "WADDLEPLAY_KEY_ALIAS=$KEY_ALIAS"
@@ -107,7 +107,10 @@ jobs:
         env:
           CI: "true"
           NODE_ENV: "production"
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: |
+          # Windows checkouts lose the executable bit on the wrapper script.
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
