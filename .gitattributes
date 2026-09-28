@@ -1,0 +1,14 @@
+# Normalize line endings to LF in the working tree on every platform.
+#
+# Required for EAS Build: it uploads the working tree (not a fresh git clone), so
+# core.autocrlf=true on Windows rewrites the shebang line of executables to
+# "#!/usr/bin/env node\r\n". Linux then fails with
+#   /usr/bin/env: 'node\r': No such file or directory   (exit 127)
+# which broke the "preinstall" hook (./scripts/cmd-guard.js) in the
+# "Install dependencies" build phase.
+#
+# `text=auto` keeps binary assets (png/jpg/ttf) untouched.
+* text=auto eol=lf
+
+# Shell scripts must never gain a CR, regardless of detection.
+*.sh text eol=lf

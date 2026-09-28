@@ -9,14 +9,14 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.safeplaydates.p2hre9"
+      "bundleIdentifier": "com.waddleplay.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#5E876D"
       },
-      "package": "com.emergent.safeplaydates.p2hre9"
+      "package": "com.waddleplay.app"
     },
     "web": {
       "bundler": "metro",
@@ -39,10 +39,25 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-status-bar",
-      "@react-native-vector-icons/feather"
+      "@react-native-vector-icons/feather",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": false
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a9d86fde-4339-4cd8-9646-30ed2f49264a"
+      }
+    },
+    "owner": "meiflumedev"
   }
 }

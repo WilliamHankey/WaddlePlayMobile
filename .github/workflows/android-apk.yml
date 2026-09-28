@@ -1,0 +1,123 @@
+name: Android APK
+
+# Free and unlimited: builds on GitHub-hosted runners using the local Gradle
+# build. No EAS quota involved.
+#
+# One-time setup (see README "Free APK pipeline"):
+#   1. Run the "Bootstrap release keystore" workflow once.
+#   2. Add its four outputs as repository secrets.
+#   3. Set repository variable BACKEND_URL to the Worker URL.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build signed release APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail early if BACKEND_URL is unset
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+        run: |
+          if [ -z "$BACKEND_URL" ]; then
+            echo "::error::Repository variable BACKEND_URL is not set. Add it under Settings > Secrets and variables > Actions > Variables > BACKEND_URL (e.g. https://waddleplay-api.<subdomain>.workers.dev)."
+            exit 1
+          fi
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret set. Building with the debug signing key; this APK cannot upgrade an existing install."
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          mkdir -p "$HOME/.gradle"
+                  {
+            echo "WADDLEPLAY_STORE_FILE=$RUNNER_TEMP/release.keystore"
+            echo "WADDLEPLAY_STORE_PASSWORD=$STORE_PASSWORD"
+            echo "WADDLEPLAY_KEY_ALIAS=$KEY_ALIAS"
+            echo "WADDLEPLAY_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$HOME/.gradle/gradle.properties"
+          echo "Release signing configured."
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile
+
+      - name: Write frontend .env
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+        run: |
+          printf 'EXPO_PUBLIC_BACKEND_URL=%s\n' "$BACKEND_URL" > frontend/.env
+          echo "EXPO_PUBLIC_BACKEND_URL=$BACKEND_URL"
+
+      - name: Build release APK
+        working-directory: frontend/android
+        env:
+          CI: "true"
+          NODE_ENV: "production"
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: waddleplay-apk
+          path: frontend/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Verify APK signature
+        working-directory: frontend/android
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -n1)
+          echo "APK: $APK ($(du -h "$APK" | cut -f1))"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n1)/apksigner" verify --print-certs "$APK" | head -n 20
+
+      - name: Attach APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: frontend/android/app/build/outputs/apk/release/*.apk

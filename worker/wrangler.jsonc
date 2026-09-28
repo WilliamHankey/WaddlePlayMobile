@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "waddleplay-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "waddleplay",
+      "database_id": "e150a5a5-76f0-42bd-8c4a-f6d1d4beadcd",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "SANITY_PROJECT_ID": "yaogb63o",
+    "SANITY_DATASET": "production",
+    "SANITY_API_VERSION": "2024-10-01",
+    "JWT_EXP_MINUTES": "10080"
+  }
+}

@@ -86,3 +86,15 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Local dev artifacts
+*.log
+*.apk
+
+# Cloudflare Workers
+# Local secrets (JWT_SECRET, SANITY_TOKEN) — never commit these.
+.dev.vars
+.dev.vars.*
+.wrangler/
+worker/wrangler-dev.log
+worker/wrangler-dev.log.err
