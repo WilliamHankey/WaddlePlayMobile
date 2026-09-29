@@ -29,9 +29,9 @@ const client = createClient({
   useCdn: false,
 });
 
-// Match the current smoke-test email shape, e.g. smoke-mfk3xq1@waddleplay.com
-const smokeUsers = await client.fetch(
-  '*[_type == "family" && parent_name == "Smoke Tester" && defined(email) && email[0] == "s"].user_id',
+// Match the smoke-test email shape, e.g. smoke-mfk3xq1@waddleplay.com
+const smokeUsers: string[] = await client.fetch(
+  '*[_type == "family" && parent_name == "Smoke Tester" && email match "smoke-*"].user_id',
 );
 const smokeSet = new Set(smokeUsers ?? []);
 console.log(`smoke-test accounts: ${smokeUsers.length}`);
@@ -44,11 +44,21 @@ const staleThreads: Doc[] = await client.fetch(
 const stalePlaydates: Doc[] = await client.fetch(
   '*[_type == "playdate" && title == "Smoke Test Playdate"]',
 );
+const smokeDocs: Doc[] = await client.fetch(
+  '*[(_type == "playdate" || _type == "forumPost" || _type == "resource") && defined(user_id) && user_id in $ids]',
+  { ids: [...smokeSet] },
+);
+const staleNotifications: Doc[] = await client.fetch(
+  '*[_type == "notification" && defined(user_id) && user_id in $ids]',
+  { ids: [...smokeSet] },
+);
 
 const deletions = [
   ...staleThreads.map((d) => d._id),
   ...stalePlaydates.map((d) => d._id),
-  ...smokeUsers.map((id: string) => `family.${id}`),
+  ...smokeDocs.map((d) => d._id),
+  ...staleNotifications.map((d) => d._id),
+  ...smokeUsers.map((id) => `family.${id}`),
 ].filter(Boolean);
 
 if (deletions.length > 0) {

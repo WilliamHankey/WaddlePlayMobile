@@ -10,7 +10,10 @@
     "db:create": "wrangler d1 create waddleplay",
     "db:migrate:local": "wrangler d1 migrations apply waddleplay --local",
     "db:migrate:remote": "wrangler d1 migrations apply waddleplay --remote",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "smoke": "node scripts/smoke.mjs",
+    "cleanup": "tsx scripts/cleanup-test-data.ts",
+    "cleanup:d1": "wrangler d1 execute waddleplay --remote --file scripts/cleanup-d1-users.sql"
   },
   "dependencies": {
     "@sanity/client": "^6.22.5",
