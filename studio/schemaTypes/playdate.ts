@@ -1,4 +1,5 @@
 import { defineField, defineType } from "sanity";
+import { urlPreview } from "./urlPreview";
 
 /** A playdate a family is hosting. */
 export const playdate = defineType({
@@ -85,7 +86,7 @@ export const playdate = defineType({
     prepare: ({ title, date, location, media }) => ({
       title,
       subtitle: [date ? new Date(date).toDateString() : null, location].filter(Boolean).join(" - "),
-      media,
+      media: urlPreview(media),
     }),
   },
 });

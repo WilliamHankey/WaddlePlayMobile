@@ -1,4 +1,5 @@
 import { defineField, defineType } from "sanity";
+import { urlPreview } from "./urlPreview";
 
 /** A parent account's profile. One document per D1 user. */
 export const family = defineType({
@@ -93,5 +94,10 @@ export const family = defineType({
   ],
   preview: {
     select: { title: "parent_name", subtitle: "location", media: "avatar_url" },
+    prepare: ({ title, subtitle, media }) => ({
+      title,
+      subtitle,
+      media: urlPreview(media),
+    }),
   },
 });

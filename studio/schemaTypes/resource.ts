@@ -1,4 +1,5 @@
 import { defineField, defineType } from "sanity";
+import { urlPreview } from "./urlPreview";
 
 /** An article, guide or video in the Resources tab. */
 export const resource = defineType({
@@ -26,6 +27,6 @@ export const resource = defineType({
   ],
   preview: {
     select: { title: "title", kind: "kind", media: "image_url" },
-    prepare: ({ title, kind, media }) => ({ title, subtitle: kind, media }),
+    prepare: ({ title, kind, media }) => ({ title, subtitle: kind, media: urlPreview(media) }),
   },
 });

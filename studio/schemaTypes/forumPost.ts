@@ -1,4 +1,5 @@
 import { defineField, defineType } from "sanity";
+import { urlPreview } from "./urlPreview";
 
 /** A discussion in the Forum tab. */
 export const forumPost = defineType({
@@ -33,7 +34,7 @@ export const forumPost = defineType({
     prepare: ({ title, topic, author, media }) => ({
       title,
       subtitle: [topic, author].filter(Boolean).join(" - "),
-      media,
+      media: urlPreview(media),
     }),
   },
 });

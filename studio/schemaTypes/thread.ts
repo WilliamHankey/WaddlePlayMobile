@@ -1,4 +1,5 @@
 import { defineField, defineType } from "sanity";
+import { urlPreview } from "./urlPreview";
 
 /** A conversation between two families, including the pre-acceptance opener. */
 export const thread = defineType({
@@ -54,5 +55,10 @@ export const thread = defineType({
   ],
   preview: {
     select: { title: "name", subtitle: "last", media: "avatar_url" },
+    prepare: ({ title, subtitle, media }) => ({
+      title,
+      subtitle,
+      media: urlPreview(media),
+    }),
   },
 });
