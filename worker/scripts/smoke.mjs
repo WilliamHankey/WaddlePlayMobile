@@ -64,6 +64,10 @@ const NEWUSER = {
 
 // ---- login ----
 let token = "";
+// Token of the throwaway account created below. Records the API keeps around
+// (a report has no delete endpoint) are filed as this user so
+// cleanup-test-data.ts can recognise and remove them.
+let throwawayToken = "";
 {
   const bad = await call("POST", "/auth/login", { body: { ...DEMO, password: "wrongpass" } });
   check("bad password is 401", bad.status === 401, `got ${bad.status}`);
@@ -177,7 +181,8 @@ if (createdPlaydateId) {
 {
   const newUser = await call("POST", "/auth/signup", { body: NEWUSER });
   check("signup returns 200", newUser.status === 200, `got ${newUser.status}`);
-  let guestToken = newUser.json?.access_token ?? "";
+  const guestToken = newUser.json?.access_token ?? "";
+  throwawayToken = guestToken;
   check("signup returns token", typeof guestToken === "string");
 
   const dupe = await call("POST", "/auth/signup", { body: NEWUSER });
@@ -235,23 +240,27 @@ if (createdPlaydateId) {
 
 // ---- safety ----
 {
-  const block = await call("POST", "/safety/block", { token, body: { target_family_id: "fam-james" } });
+  // Uses the throwaway account, not the demo user: a report is a permanent
+  // record with no delete endpoint, so it has to belong to data that
+  // cleanup-test-data.ts can remove.
+  const safetyToken = throwawayToken || token;
+  const block = await call("POST", "/safety/block", { token: safetyToken, body: { target_family_id: "fam-james" } });
   check("block returns blocked", block.json?.status === "blocked", JSON.stringify(block.json));
 
-  const check1 = await call("GET", "/families/fam-james", { token });
+  const check1 = await call("GET", "/families/fam-james", { token: safetyToken });
   check("blocked flag true after block", check1.json?.blocked === true);
 
-  const list = await call("GET", "/playdates", { token });
+  const list = await call("GET", "/playdates", { token: safetyToken });
   const hidden = (list.json ?? []).some((p) => p.host_family_id === "fam-james");
   check("blocked host's playdates hidden", !hidden, "pd-soccer should be hidden");
 
-  const unblock = await call("POST", "/safety/unblock", { token, body: { target_family_id: "fam-james" } });
+  const unblock = await call("POST", "/safety/unblock", { token: safetyToken, body: { target_family_id: "fam-james" } });
   check("unblock returns unblocked", unblock.json?.status === "unblocked");
 
-  const list2 = await call("GET", "/playdates", { token });
+  const list2 = await call("GET", "/playdates", { token: safetyToken });
   check("playdates return after unblock", (list2.json ?? []).some((p) => p.host_family_id === "fam-james"));
 
-  const report = await call("POST", "/safety/report", { token, body: { target_family_id: "fam-james", reason: "spam" } });
+  const report = await call("POST", "/safety/report", { token: safetyToken, body: { target_family_id: "fam-james", reason: "spam" } });
   check("report returns reported", report.json?.status === "reported", JSON.stringify(report.json));
 }
 

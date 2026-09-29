@@ -52,12 +52,35 @@ const staleNotifications: Doc[] = await client.fetch(
   '*[_type == "notification" && defined(user_id) && user_id in $ids]',
   { ids: [...smokeSet] },
 );
+// Safety records written by the smoke test: it blocks/unblocks a family and
+// files a report, and neither is removed by the test itself.
+const staleSafetyRecords: Doc[] = await client.fetch(
+  '*[(_type == "safetyBlock" || _type == "report") && defined(user_id) && user_id in $ids]',
+  { ids: [...smokeSet] },
+);
+
+// Records whose owner is gone. Cleanup deletes the smoke family profile but
+// D1-side records (join requests, reports, blocks) outlive it, and a later run
+// can no longer match them by user_id because the family document is gone.
+// A real user always has a family profile, so "no family" means "test data".
+const orphaned: string[] = await client.fetch(
+  '*[_type in ["joinRequest", "report", "safetyBlock"] && !(user_id in *[_type == "family"].user_id)]._id',
+);
+
+// A report has no delete endpoint in the API, so the smoke test files it as the
+// throwaway user. Older runs used the demo user, so clear those too.
+const demoReports: string[] = await client.fetch(
+  '*[_type == "report" && user_id == "demo-user-1" && reason == "spam" && target_family_id == "fam-james"]._id',
+);
 
 const deletions = [
   ...staleThreads.map((d) => d._id),
   ...stalePlaydates.map((d) => d._id),
   ...smokeDocs.map((d) => d._id),
   ...staleNotifications.map((d) => d._id),
+  ...staleSafetyRecords.map((d) => d._id),
+  ...orphaned,
+  ...demoReports,
   ...smokeUsers.map((id) => `family.${id}`),
 ].filter(Boolean);
 

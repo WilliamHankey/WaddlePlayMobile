@@ -6,6 +6,7 @@
 
 # Dependencies
 node_modules/
+studio/.sanity/
 /node_modules
 /.pnp
 .pnp.js

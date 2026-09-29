@@ -1,4 +1,4 @@
-import { createClient, type SanityClient } from "@sanity/client";
+﻿import { createClient, type SanityClient } from "@sanity/client";
 import type { Env } from "./env";
 
 export type Doc = Record<string, unknown>;
@@ -17,7 +17,9 @@ const T = {
   savedResource: "savedResource",
   thread: "thread",
   notification: "notification",
-  block: "block",
+  // "block" is a reserved Sanity type name (rich text), so the safety-block
+  // collection is stored as safetyBlock.
+  safetyBlock: "safetyBlock",
   report: "report",
 } as const;
 
@@ -284,7 +286,7 @@ export const repo = {
   listBlocks: async (env: Env, userId: string): Promise<Doc[]> =>
     toApiList(
       await client(env).fetch('*[_type == $type && user_id == $userId]', {
-        type: T.block,
+        type: T.safetyBlock,
         userId,
       }),
     ),
@@ -292,14 +294,14 @@ export const repo = {
   upsertBlock: async (env: Env, data: Doc): Promise<void> => {
     const { id, ...rest } = data;
     await client(env).createIfNotExists({
-      _id: ref(T.block, String(id)),
-      _type: T.block,
+      _id: ref(T.safetyBlock, String(id)),
+      _type: T.safetyBlock,
       ...rest,
     });
   },
 
   removeBlock: async (env: Env, id: string): Promise<void> => {
-    await client(env).delete(ref(T.block, id));
+    await client(env).delete(ref(T.safetyBlock, id));
   },
 
   blockId: (userId: string, targetFamilyId: string): string =>

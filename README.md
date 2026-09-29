@@ -6,6 +6,7 @@ Cloudflare Worker API backed by Sanity (app data) and Cloudflare D1 (auth).
 ```
 frontend/   Expo app + Android project   -> the APK
 worker/     Hono API on Cloudflare Workers
+studio/     Sanity Studio, hosted on *.sanity.studio
 backend/    Original FastAPI + MongoDB service, kept only as a reference
 ```
 
@@ -16,9 +17,12 @@ backend/    Original FastAPI + MongoDB service, kept only as a reference
 | API | `https://waddleplay-api.wchankey15.workers.dev` |
 | Sanity | project `yaogb63o`, dataset `production` |
 | D1 | `waddleplay` (users only) |
+| Studio | `https://waddleplay.sanity.studio/` (Sanity-hosted, free tier) |
 | APK | build artifact of the `Android APK` GitHub workflow |
 
-Sign in with `demo@waddleplay.com` / `password123`.
+Sign in with `demo@waddleplay.com` / `password123`. The Studio is only reachable
+for accounts that are members of the Sanity project; the dataset itself is
+private and unreadable without a token.
 
 ## Backend
 
@@ -47,6 +51,30 @@ npm run cleanup:d1     # D1: the smoke-test users
 
 `npm run smoke` is read-mostly but does write, so always follow it with
 `npm run cleanup` when pointing it at the production dataset.
+
+## Studio
+
+The content model lives in `studio/schemaTypes/`. Editing a document there
+changes what the mobile app shows on its next API call, because the Worker
+serves documents verbatim.
+
+```bash
+cd studio
+npm install
+npm run dev      # http://localhost:3333
+npm run build
+npm run deploy   # publishes to waddleplay.sanity.studio
+```
+
+`sanity deploy` also uploads the schema manifest, which is what makes the
+project show up in the Sanity dashboard. Two things to keep in mind:
+
+- A document's `_id` is its public API id: `playdate.pd-park` is served as
+  `id: "pd-park"`. Renaming or recreating a document changes the id the app
+  uses, so edit documents instead of replacing them.
+- `block` is a reserved Sanity type name (rich text), which is why the safety
+  block collection is `safetyBlock`. Renaming it back makes schema validation
+  fail and `sanity deploy` refuse the schema.
 
 ## Free APK pipeline
 
