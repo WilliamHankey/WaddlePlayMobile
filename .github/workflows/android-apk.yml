@@ -52,6 +52,9 @@ jobs:
           cache: "yarn"
           cache-dependency-path: frontend/yarn.lock
 
+      - name: Validate image asset formats
+        run: node frontend/scripts/check-image-assets.js
+
       - name: Set up Android SDK
         # The runner image already ships a working SDK and accepted licences;
         # setup-android@v3 tries to install the removed "tools" package and

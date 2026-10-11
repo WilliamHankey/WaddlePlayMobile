@@ -41,7 +41,7 @@ export default function SignIn() {
         <Text style={styles.title} testID="signin-title">Welcome back!</Text>
         <Text style={styles.subtitle}>Sign in to connect with playdate families you <Text style={{ color: colors.brandPrimary, fontWeight: "600" }}>trust.</Text></Text>
 
-        <Image source={require("../../assets/images/design/generated-7.png")} style={styles.hero} />
+        <Image source={require("../../assets/images/design/generated-7.jpg")} style={styles.hero} />
 
         <View style={styles.field}>
           <Icon name="mail" size={18} color={colors.muted} />

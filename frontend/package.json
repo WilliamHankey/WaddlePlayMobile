@@ -4,6 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "preinstall": "node ./scripts/cmd-guard.js --preinstall",
+    "check:assets": "node ./scripts/check-image-assets.js",
+    "eas-build-post-install": "node ./scripts/check-image-assets.js",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
