@@ -125,11 +125,14 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace
 
+      - name: Prepare named APK download
+        run: cp frontend/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/waddleplay.apk"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: waddleplay-apk
-          path: frontend/android/app/build/outputs/apk/release/*.apk
+          path: ${{ runner.temp }}/waddleplay.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -144,4 +147,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: frontend/android/app/build/outputs/apk/release/*.apk
+          files: ${{ runner.temp }}/waddleplay.apk
