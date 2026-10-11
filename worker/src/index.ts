@@ -6,6 +6,9 @@ import { hashPassword, signToken, verifyPassword, verifyToken } from "./crypto";
 import { createUser, findUserByEmail, findUserById } from "./db";
 import { matchDetails } from "./matching";
 import { repo } from "./sanity";
+import { bodyLimit } from "hono/body-limit";
+import { registerMobileRoutes } from "./mobile-routes";
+import { deliverPush, notify, publicFamily, rateLimit, threadParticipant } from "./mobile-services";
 
 type A = any;
 
@@ -80,10 +83,12 @@ app.use(
     origin: "*",
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["*"],
-    credentials: true,
+    credentials: false,
     maxAge: 86400,
   }),
 );
+
+app.use("/api/*", bodyLimit({ maxSize: 32768, onError: c => c.json({ detail: "Request too large" }, 413) }));
 
 const PUBLIC_PATHS = new Set(["/api/", "/api/auth/login", "/api/auth/signup"]);
 
@@ -98,13 +103,30 @@ app.use("/api/*", async (c, next) => {
   const payload = await verifyToken(c.env.JWT_SECRET, header.slice(7).trim());
   if (!payload) return c.json({ detail: "Invalid or expired token" }, 401);
   const user = await findUserById(c.env.DB, payload.sub);
-  if (!user) return c.json({ detail: "Invalid or expired token" }, 401);
+  if (!user || payload.email !== user.email) return c.json({ detail: "Invalid or expired token" }, 401);
   c.set("user", user);
   await next();
 });
 
 const auth = (c: A): User => c.get("user") as User;
 const expMinutes = (env: Env): number => Number(env.JWT_EXP_MINUTES || 10080);
+
+registerMobileRoutes(app);
+
+async function requireVerified(env: Env, userId: string) {
+  const family = await repo.familyByUserId(env, userId);
+  if (!family?.verified) fail(403, "Complete community verification before joining or hosting playdates.");
+}
+async function threadForUser(env: Env, id: string, userId: string): Promise<A> {
+  const thread = await repo.threadById(env, id);
+  if (!thread || !threadParticipant(thread, userId)) fail(404, "Thread not found");
+  return thread;
+}
+async function threadView(env: Env, thread: A, userId: string) {
+  const initiator = thread.initiator_id === userId;
+  const other = await repo.familyById(env, initiator ? thread.family_id : thread.initiator_id);
+  return { ...thread, name: other?.parent_name || "Family", avatar_url: other?.avatar_url || null, family_id: other?.id || (initiator ? thread.family_id : thread.initiator_id), is_initiator: initiator, unread: thread[initiator ? "unread_for_initiator" : "unread_for_recipient"] || 0, messages: (thread.messages || []).map((message: A) => ({ ...message, from: (message.sender_id || (message.from === "me" ? thread.initiator_id : thread.family_id)) === userId ? "me" : "them" })) };
+}
 
 // ----------------------------- health -----------------------------
 app.get("/api/", (c) => c.json({ app: "Waddle Play", status: "ok" }));
@@ -126,8 +148,6 @@ app.post("/api/auth/signup", async (c) => {
   await repo.createFamily(c.env, {
     id: userId,
     user_id: userId,
-    // Recorded so cleanup tooling can identify throwaway accounts.
-    email,
     parent_name: displayName,
     location: "",
     bio: "",
@@ -136,7 +156,7 @@ app.post("/api/auth/signup", async (c) => {
     sensory_preferences: [],
     interests: [],
     communication_style: null,
-    verified: true,
+    verified: false,
     children: [],
   });
   return c.json({
@@ -178,12 +198,19 @@ app.put("/api/profile/me", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as A;
   const user = auth(c);
   const patch: A = {};
+  const allowed = new Set(["parent_name", "location", "bio", "avatar_url", "family_values", "sensory_preferences", "interests", "communication_style", "children"]);
   for (const [key, value] of Object.entries(body ?? {})) {
-    if (value !== null && value !== undefined) patch[key] = value;
+    if (!allowed.has(key)) fail(422, `Cannot edit ${key} through the profile endpoint`);
+    if (["family_values", "sensory_preferences", "interests"].includes(key) && (!Array.isArray(value) || value.length > 30 || value.some(v => typeof v !== "string" || v.length > 80))) fail(422, "Invalid profile tags");
+    if (["parent_name", "location", "bio", "communication_style"].includes(key) && (typeof value !== "string" || value.length > (key === "bio" ? 2000 : 200))) fail(422, "Invalid profile field");
+    if (key === "parent_name" && !String(value).trim()) fail(422, "Enter your full name");
+    if (key === "avatar_url" && value !== null && (typeof value !== "string" || !/^https:\/\//.test(value) || value.length > 2048)) fail(422, "Invalid photo URL");
+    if (key === "children") {
+      if (!Array.isArray(value) || value.length > 12 || value.some(child => !child || typeof child.name !== "string" || !child.name.trim() || child.name.length > 100 || !Number.isInteger(child.age) || child.age < 0 || child.age > 18)) fail(422, "Invalid child profile");
+      patch.children = value.map(child => ({ _key: typeof child._key === "string" ? child._key : uuid(), name: child.name.trim(), age: child.age, interests: Array.isArray(child.interests) ? child.interests.filter((i: A) => typeof i === "string").slice(0, 30) : [] }));
+    } else patch[key] = value;
   }
   if (Object.keys(patch).length > 0) {
-    delete patch.id;
-    delete patch.user_id;
     await repo.patchFamilyByUserId(c.env, user.id, patch);
   }
   const fam = await repo.familyByUserId(c.env, user.id);
@@ -213,6 +240,7 @@ app.get("/api/playdates", async (c) => {
     p.match_score = score;
     p.match_reasons = reasons;
     p.host_verified = Boolean(host && host.verified);
+    if (user.id !== p.host_family_id && !(p.attendee_family_ids ?? []).includes(user.id)) delete p.private_note;
     out.push(p);
   }
   out.sort((a, b) => b.match_score - a.match_score);
@@ -230,7 +258,7 @@ app.get("/api/playdates/:playdate_id", async (c) => {
   p.match_score = score;
   p.match_reasons = reasons;
   p.host_verified = Boolean(host && host.verified);
-  p.host = host;
+  p.host = host ? publicFamily(host) : null;
   p.joined = (p.attendee_family_ids ?? []).includes(user.id);
   p.is_host = user.id === p.host_family_id;
 
@@ -255,9 +283,12 @@ app.get("/api/playdates/:playdate_id", async (c) => {
 
 app.post("/api/playdates/:playdate_id/join", async (c) => {
   const user = auth(c);
+  await requireVerified(c.env, user.id);
   const p = (await repo.playdateById(c.env, c.req.param("playdate_id"))) as A;
   if (!p) fail(404, "Playdate not found");
   if (user.id === p.host_family_id) fail(400, "You are the host of this playdate");
+  const blocks = await repo.blocksInvolving(c.env, user.id);
+  if (blocks.some(b => b.user_id === p.host_family_id || b.target_family_id === p.host_family_id)) fail(403, "This playdate is unavailable.");
   if ((p.attendee_family_ids ?? []).includes(user.id)) {
     return c.json({ status: "already_joined" });
   }
@@ -274,6 +305,7 @@ app.post("/api/playdates/:playdate_id/join", async (c) => {
     status: "pending",
     created_at: nowIso(),
   });
+  c.executionCtx.waitUntil(notify(c.env, p.host_family_id, "playdates", "New playdate request", "A family requested to join your playdate.", `/playdate/${p.id}`));
   return c.json({ status: "requested" });
 });
 
@@ -289,7 +321,7 @@ app.get("/api/playdates/:playdate_id/requests", async (c) => {
     const fam = await repo.familyById(c.env, r.user_id);
     if (!fam) continue;
     const { score, reasons } = matchDetails(fam, p, host);
-    out.push({ ...r, family: fam, match_score: score, match_reasons: reasons });
+    out.push({ ...r, family: publicFamily(fam), match_score: score, match_reasons: reasons });
   }
   return c.json(out);
 });
@@ -317,6 +349,7 @@ app.post("/api/playdates/:playdate_id/requests/:request_id/approve", async (c) =
     status: "approved",
     decided_at: nowIso(),
   });
+  c.executionCtx.waitUntil(notify(c.env, req.user_id, "playdates", "Playdate request approved", "Your family is invited to the playdate.", `/playdate/${p.id}`));
   return c.json({ status: "approved" });
 });
 
@@ -329,10 +362,12 @@ app.post("/api/playdates/:playdate_id/requests/:request_id/decline", async (c) =
   const requestId = c.req.param("request_id");
   const req = (await repo.joinRequestById(c.env, requestId, p.id as string)) as A;
   if (!req) fail(404, "Request not found");
+  if (req.status !== "pending") return c.json({ status: req.status });
   await repo.patchJoinRequest(c.env, requestId, {
     status: "declined",
     decided_at: nowIso(),
   });
+  c.executionCtx.waitUntil(notify(c.env, req.user_id, "playdates", "Playdate request updated", "The host could not accept your request this time.", `/playdate/${p.id}`));
   return c.json({ status: "declined" });
 });
 
@@ -341,6 +376,8 @@ app.post("/api/playdates", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as A;
   const fam = await repo.familyByUserId(c.env, user.id);
   if (!fam) fail(400, "Complete your profile first");
+  await requireVerified(c.env, user.id);
+  if (typeof body.title !== "string" || !body.title.trim() || body.title.length > 140 || typeof body.location !== "string" || !body.location.trim() || body.location.length > 200 || !Number.isInteger(body.age_min) || !Number.isInteger(body.age_max) || body.age_min < 0 || body.age_max > 18 || body.age_min > body.age_max) fail(422, "Invalid playdate details");
 
   const doc = {
     id: `pd-${hex(8)}`,
@@ -390,7 +427,7 @@ app.get("/api/families/:family_id", async (c) => {
     fam,
   );
   fam.match_score = score;
-  return c.json(fam);
+  return c.json(publicFamily(fam));
 });
 
 // ----------------------------- safety -----------------------------
@@ -427,7 +464,7 @@ app.post("/api/safety/report", async (c) => {
 });
 
 // ----------------------------- forum -----------------------------
-app.get("/api/forum", async (c) => c.json(await repo.listForumPosts(c.env)));
+app.get("/api/forum", async (c) => c.json((await repo.listForumPosts(c.env)).map(p => ({ ...p, hours_ago: p.created_at ? Math.max(0, Math.floor((Date.now() - new Date(String(p.created_at)).getTime()) / 3600000)) : p.hours_ago }))));
 
 app.get("/api/forum/:post_id", async (c) => {
   const post = await repo.forumPostById(c.env, c.req.param("post_id"));
@@ -479,12 +516,7 @@ app.get("/api/profile/saved-resources", async (c) => {
 // ----------------------------- threads -----------------------------
 app.get("/api/threads", async (c) => {
   const user = auth(c);
-  const items = ((await repo.listThreads(c.env)) as A[]).map((t) => {
-    if (t.status === undefined) t.status = "active";
-    if (t.initiator_id === undefined) t.initiator_id = null;
-    t.is_initiator = t.initiator_id === user.id;
-    return t;
-  });
+  const items = await Promise.all((await repo.listThreads(c.env, user.id)).filter(t => threadParticipant(t, user.id)).map(t => threadView(c.env, t, user.id)));
   const rank = (t: A) =>
     t.status === "requested" ? (t.is_initiator ? 1 : 0) : 2;
   items.sort((a, b) => rank(a) - rank(b));
@@ -493,30 +525,28 @@ app.get("/api/threads", async (c) => {
 
 app.get("/api/threads/:thread_id", async (c) => {
   const user = auth(c);
-  const t = (await repo.threadById(c.env, c.req.param("thread_id"))) as A;
-  if (!t) fail(404, "Thread not found");
-  if (t.status === undefined) t.status = "active";
-  if (t.initiator_id === undefined) t.initiator_id = null;
-  t.is_initiator = t.initiator_id === user.id;
-  return c.json(t);
+  const t = await threadForUser(c.env, c.req.param("thread_id"), user.id);
+  await repo.patchThread(c.env, t.id, { [t.initiator_id === user.id ? "unread_for_initiator" : "unread_for_recipient"]: 0 });
+  return c.json(await threadView(c.env, t, user.id));
 });
 
 app.post("/api/threads/:thread_id/messages", async (c) => {
+  const user = auth(c);
   const body = (await c.req.json().catch(() => ({}))) as A;
-  const t = (await repo.threadById(c.env, c.req.param("thread_id"))) as A;
-  if (!t) fail(404, "Thread not found");
+  const t = await threadForUser(c.env, c.req.param("thread_id"), user.id);
+  if (typeof body.text !== "string" || !body.text.trim() || body.text.length > 4000) fail(422, "Enter a message up to 4000 characters.");
+  if (!await rateLimit(c.env.DB, user.id, "message", 60, 60)) fail(429, "Please slow down.");
   if (t.status === "requested") fail(400, "Waiting for the other family to accept your chat request");
   if (t.status === "declined") fail(400, "This chat request was declined");
 
   const at = hhmm();
-  const message = { from: "me", text: body.text, at };
-  const messages: A[] = [...(t.messages ?? []), message];
-  await repo.patchThread(c.env, t.id as string, {
-    messages,
-    last: body.text,
-    at,
-    unread: 0,
-  });
+  const messageId = typeof body.client_message_id === "string" && /^[A-Za-z0-9_-]{10,100}$/.test(body.client_message_id) ? body.client_message_id : uuid();
+  const message = { _key: messageId, sender_id: user.id, text: body.text.trim(), at };
+  const recipient = t.initiator_id === user.id ? t.family_id : t.initiator_id;
+  const blocks = await repo.blocksInvolving(c.env, user.id);
+  if (blocks.some(b => b.user_id === recipient || b.target_family_id === recipient)) fail(403, "This conversation is unavailable.");
+  const inserted = await repo.appendMessage(c.env, t.id, message, recipient === t.initiator_id ? "unread_for_initiator" : "unread_for_recipient");
+  if (inserted) c.executionCtx.waitUntil(notify(c.env, recipient, "messages", "New message", "A family sent you a message.", `/messages/${t.id}`));
   return c.json({ status: "sent", message });
 });
 
@@ -526,6 +556,10 @@ app.post("/api/threads/request", async (c) => {
   const fam = (await repo.familyById(c.env, body.target_family_id)) as A;
   if (!fam) fail(404, "Family not found");
   if (body.target_family_id === user.id) fail(400, "You cannot message yourself");
+  if (typeof body.opening_message !== "string" || !body.opening_message.trim() || body.opening_message.length > 4000) fail(422, "Enter a message up to 4000 characters.");
+  if (!await rateLimit(c.env.DB, user.id, "chat-request", 20)) fail(429, "Please try again later.");
+  const blocks = await repo.blocksInvolving(c.env, user.id);
+  if (blocks.some(b => b.user_id === body.target_family_id || b.target_family_id === body.target_family_id)) fail(403, "This conversation is unavailable.");
 
   const existing = await repo.threadByFamilyAndInitiator(
     c.env,
@@ -547,35 +581,39 @@ app.post("/api/threads/request", async (c) => {
     unread: 0,
     status: "requested",
     initiator_id: user.id,
-    messages: [{ from: "me", text: body.opening_message, at }],
+    unread_for_initiator: 0,
+    unread_for_recipient: 1,
+    messages: [{ _key: uuid(), sender_id: user.id, text: body.opening_message.trim(), at }],
   };
   await repo.createThread(c.env, doc);
-  return c.json({ status: "requested", thread_id: doc.id, thread: doc });
+  c.executionCtx.waitUntil(notify(c.env, body.target_family_id, "messages", "New conversation", "A family would like to connect.", `/messages/${doc.id}`));
+  return c.json({ status: "requested", thread_id: doc.id, thread: await threadView(c.env, doc, user.id) });
 });
 
 app.post("/api/threads/:thread_id/accept", async (c) => {
   const user = auth(c);
-  const t = (await repo.threadById(c.env, c.req.param("thread_id"))) as A;
-  if (!t) fail(404, "Thread not found");
-  if (t.initiator_id === user.id) fail(400, "Only the recipient can accept");
+  const t = await threadForUser(c.env, c.req.param("thread_id"), user.id);
+  if (t.family_id !== user.id) fail(403, "Only the recipient can accept");
+  if (t.status !== "requested") return c.json({ status: t.status });
   await repo.patchThread(c.env, t.id as string, { status: "active" });
+  c.executionCtx.waitUntil(notify(c.env, t.initiator_id, "messages", "Conversation accepted", "Your conversation is ready.", `/messages/${t.id}`));
   return c.json({ status: "active" });
 });
 
 app.post("/api/threads/:thread_id/decline", async (c) => {
   const user = auth(c);
-  const t = (await repo.threadById(c.env, c.req.param("thread_id"))) as A;
-  if (!t) fail(404, "Thread not found");
-  if (t.initiator_id === user.id) fail(400, "Only the recipient can decline");
+  const t = await threadForUser(c.env, c.req.param("thread_id"), user.id);
+  if (t.family_id !== user.id) fail(403, "Only the recipient can decline");
+  if (t.status !== "requested") return c.json({ status: t.status });
   await repo.patchThread(c.env, t.id as string, { status: "declined" });
   return c.json({ status: "declined" });
 });
 
 // ----------------------------- notifications -----------------------------
-app.get("/api/notifications", async (c) => c.json(await repo.listNotifications(c.env)));
+app.get("/api/notifications", async (c) => c.json((await c.env.DB.prepare("SELECT id,kind,title,body,route,created_at AS at,unread FROM user_notifications WHERE user_id=?1 ORDER BY created_at DESC LIMIT 100").bind(auth(c).id).all()).results));
 
 app.post("/api/notifications/read-all", async (c) => {
-  await repo.markAllNotificationsRead(c.env);
+  await c.env.DB.prepare("UPDATE user_notifications SET unread=0 WHERE user_id=?1").bind(auth(c).id).run();
   return c.json({ status: "ok" });
 });
 
@@ -590,4 +628,8 @@ app.onError((err, c) => {
   return c.json({ detail: "Internal Server Error" }, 500);
 });
 
-export default app;
+export { app };
+export default {
+  fetch: app.fetch,
+  scheduled: (_controller: ScheduledController, env: Env, ctx: ExecutionContext) => ctx.waitUntil(deliverPush(env)),
+};

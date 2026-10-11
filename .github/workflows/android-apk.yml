@@ -102,6 +102,16 @@ jobs:
           printf 'EXPO_PUBLIC_BACKEND_URL=%s\n' "$BACKEND_URL" > frontend/.env
           echo "EXPO_PUBLIC_BACKEND_URL=$BACKEND_URL"
 
+      - name: Configure free Android push
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > frontend/android/app/google-services.json
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON is unset. In-app notifications work, but this APK will not receive Android push alerts."
+          fi
+
       - name: Build release APK
         working-directory: frontend/android
         env:

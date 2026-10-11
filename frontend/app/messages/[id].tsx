@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
 import { colors, spacing, radius } from "@/src/theme";
 import { ThreadsAPI } from "@/src/api";
+import { EmptyState, Notice } from "@/src/components/screen-ui";
 
 export default function Chat() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,15 +15,18 @@ export default function Chat() {
   const router = useRouter();
   const qc = useQueryClient();
   const [text, setText] = useState("");
+  const [outgoing, setOutgoing] = useState<string | null>(null);
+  const outgoingId = useRef("");
   const scrollRef = useRef<ScrollView>(null);
 
-  const { data, isLoading } = useQuery({ queryKey: ["thread", id], queryFn: () => ThreadsAPI.get(String(id)) });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ["thread", id], queryFn: () => ThreadsAPI.get(String(id)), refetchInterval: 15000 });
 
   const sendMut = useMutation({
-    mutationFn: (t: string) => ThreadsAPI.send(String(id), t),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["thread", id] });
+    mutationFn: (t: string) => ThreadsAPI.send(String(id), t, outgoingId.current),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["thread", id] });
       qc.invalidateQueries({ queryKey: ["threads"] });
+      setOutgoing(null);
     },
   });
 
@@ -44,16 +48,20 @@ export default function Chat() {
   });
 
   useEffect(() => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
-  }, [data]);
+    const timeout = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
+    return () => clearTimeout(timeout);
+  }, [data, outgoing, sendMut.isError]);
 
   const onSend = () => {
     const t = text.trim();
-    if (!t) return;
+    if (!t || sendMut.isPending || outgoing) return;
+    outgoingId.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setOutgoing(t);
     sendMut.mutate(t);
     setText("");
   };
 
+  if (isError) return <View style={[styles.root, { paddingTop: insets.top + 24 }]}><EmptyState title="Couldn’t load conversation" description="Check your connection and try again." action="Try again" onAction={() => { void refetch(); }} secondary="Back to messages" onSecondary={() => router.back()} /></View>;
   if (isLoading || !data) return <View style={[styles.root, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>;
 
   return (
@@ -96,10 +104,13 @@ export default function Chat() {
         ) : null}
         {(data.messages || []).map((m: any, i: number) => (
           <View key={i} style={[styles.msg, m.from === "me" ? styles.msgMine : styles.msgTheirs]}>
-            <Text style={[styles.msgText, m.from === "me" && { color: colors.onBrandPrimary }]}>{m.text}</Text>
-            <Text style={[styles.msgAt, m.from === "me" && { color: colors.onBrandPrimary, opacity: 0.7 }]}>{m.at}</Text>
+            <Text style={[styles.msgText, m.from === "me" && { color: colors.onSurface }]}>{m.text}</Text>
+            <Text style={[styles.msgAt, m.from === "me" && { color: colors.muted }]}>{m.at}</Text>
           </View>
         ))}
+        {outgoing && <Pressable testID="chat-outgoing" accessibilityLabel={sendMut.isError ? "Message not sent. Tap to retry" : "Sending message"} disabled={!sendMut.isError} onPress={() => sendMut.mutate(outgoing)} style={[styles.msg, styles.msgMine]}><Text style={styles.msgText}>{outgoing}</Text><Text style={[styles.msgAt, sendMut.isError && { color: colors.error }]}>{sendMut.isError ? "Not sent · Tap to retry" : "Sending…"}</Text></Pressable>}
+        {sendMut.isError && <Notice error>Message couldn’t be sent. Check your connection.</Notice>}
+        {(acceptMut.isError || declineMut.isError) && <Notice error>Couldn’t update this invitation. Please try again.</Notice>}
       </ScrollView>
 
       {data.status === "requested" && !data.is_initiator ? (
@@ -126,7 +137,7 @@ export default function Chat() {
               multiline
             />
           </View>
-          <Pressable style={[styles.sendBtn, (sendMut.isPending || !text.trim() || data.status === "requested") && { opacity: 0.5 }]} onPress={onSend} disabled={sendMut.isPending || !text.trim() || data.status === "requested"} testID="chat-send">
+          <Pressable style={[styles.sendBtn, (sendMut.isPending || !!outgoing || !text.trim() || data.status === "requested") && { opacity: 0.5 }]} onPress={onSend} disabled={sendMut.isPending || !!outgoing || !text.trim() || data.status === "requested"} testID="chat-send">
             <Icon name="send" size={18} color={colors.onBrandPrimary} />
           </Pressable>
         </View>
@@ -145,7 +156,7 @@ const styles = StyleSheet.create({
   verifiedText: { color: colors.brandPrimary, fontSize: 11, fontWeight: "600" },
   iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   msg: { maxWidth: "80%", padding: spacing.md, borderRadius: radius.lg },
-  msgMine: { alignSelf: "flex-end", backgroundColor: colors.brandPrimary, borderBottomRightRadius: 4 },
+  msgMine: { alignSelf: "flex-end", backgroundColor: "#E5EAF0", borderBottomRightRadius: 4 },
   msgTheirs: { alignSelf: "flex-start", backgroundColor: colors.surfaceSecondary, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: colors.border },
   msgText: { color: colors.onSurface, fontSize: 14, lineHeight: 20 },
   msgAt: { color: colors.muted, fontSize: 10, marginTop: 4 },

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { AuthAPI, getToken, setToken } from "./api";
+import { queryClient } from "./query-client";
+import { unregisterPush } from "./push";
 
 type User = { id: string; email: string; name: string };
 
@@ -9,6 +11,7 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
+  changeEmail: (email: string, password: string) => Promise<void>;
 };
 
 const AuthCtx = createContext<AuthState | null>(null);
@@ -43,12 +46,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Refuse to leave a device subscribed to this account if deregistration fails.
+    await unregisterPush();
     await setToken(null);
+    queryClient.clear();
     setUser(null);
+  }, []);
+  const changeEmail = useCallback(async (email: string, password: string) => {
+    const result = await AuthAPI.changeEmail(email, password);
+    await setToken(result.access_token);
+    setUser(result.user);
+    queryClient.invalidateQueries({ queryKey: ["profile"] });
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, changeEmail }}>
       {children}
     </AuthCtx.Provider>
   );

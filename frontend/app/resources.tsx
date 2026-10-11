@@ -1,176 +1,28 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, useWindowDimensions, Linking } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, fonts, spacing, radius } from "@/src/theme";
 import { ResourcesAPI } from "@/src/api";
+import { ExploreBackButton } from "@/src/components/explore-back-button";
+import { ActionButton, EmptyState, SkeletonCards, Sheet, ui } from "@/src/components/screen-ui";
 
-const KIND_FILTERS = [
-  { id: "all", label: "All", icon: "grid" as const },
-  { id: "saved", label: "Saved", icon: "bookmark" as const },
-  { id: "article", label: "Articles", icon: "file-text" as const },
-  { id: "guide", label: "Guides", icon: "book-open" as const },
-  { id: "video", label: "Videos", icon: "play-circle" as const },
-];
-
-function BookmarkBtn({ resource }: { resource: any }) {
+const FILTERS = [{ id: "all", label: "All", icon: "grid" }, { id: "article", label: "Articles", icon: "file-text" }, { id: "guide", label: "Guides", icon: "book-open" }, { id: "video", label: "Videos", icon: "play-circle" }, { id: "service", label: "Local Services", icon: "map-pin" }];
+function Bookmark({ resource }: { resource: any }) {
   const qc = useQueryClient();
-  const saveMut = useMutation({
-    mutationFn: () => resource.saved ? ResourcesAPI.unsave(resource.id) : ResourcesAPI.save(resource.id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["resources"] });
-      qc.invalidateQueries({ queryKey: ["saved-resources"] });
-    },
-  });
-  return (
-    <Pressable onPress={() => saveMut.mutate()} hitSlop={10} testID={`bookmark-${resource.id}`}>
-      <Icon name="bookmark" size={20} color={resource.saved ? colors.brandPrimary : colors.muted} />
-    </Pressable>
-  );
+  const mutation = useMutation({ mutationFn: () => resource.saved ? ResourcesAPI.unsave(resource.id) : ResourcesAPI.save(resource.id), onSuccess: () => { qc.invalidateQueries({ queryKey: ["resources"] }); qc.invalidateQueries({ queryKey: ["saved-resources"] }); } });
+  return <View><Pressable disabled={mutation.isPending} accessibilityLabel={resource.saved ? "Unsave resource" : "Save resource"} onPress={() => mutation.mutate()} hitSlop={10} testID={`bookmark-${resource.id}`}><Icon name="bookmark" size={18} color={resource.saved ? colors.brandPrimary : colors.muted} /></Pressable>{mutation.isError && <Text accessibilityRole="alert" style={{ color: colors.error, fontSize: 10 }}>Try again</Text>}</View>;
 }
-
 export default function Resources() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const { width } = useWindowDimensions();
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
-  const { data, isLoading } = useQuery({ queryKey: ["resources"], queryFn: ResourcesAPI.list });
-
-  const { featured, latest } = useMemo(() => {
-    let list = (data || []) as any[];
-    if (kind === "saved") list = list.filter((r) => r.saved);
-    else if (kind !== "all") list = list.filter((r) => r.kind === kind);
-    if (query.trim()) list = list.filter((r) => r.title.toLowerCase().includes(query.toLowerCase()));
-    return { featured: list.filter((r) => r.featured), latest: list.filter((r) => !r.featured) };
-  }, [data, kind, query]);
-
-  const savedCount = (data || []).filter((r: any) => r.saved).length;
-
-  return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable style={styles.back} onPress={() => router.back()} testID="resources-back">
-          <Icon name="arrow-left" size={20} color={colors.onSurface} />
-        </Pressable>
-        <Text style={styles.title}>Resources</Text>
-        <Pressable style={styles.iconBtn} testID="resources-saved" onPress={() => setKind("saved")}>
-          <Icon name="bookmark" size={18} color={colors.brandPrimary} />
-          {savedCount > 0 && <View style={styles.savedBadge}><Text style={styles.savedBadgeText}>{savedCount}</Text></View>}
-        </Pressable>
-      </View>
-
-      <View style={styles.sticky}>
-        <View style={styles.search}>
-          <Icon name="search" size={16} color={colors.muted} />
-          <TextInput style={styles.searchInput} placeholder="Search resources…" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} testID="resources-search" />
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          {KIND_FILTERS.map((k) => {
-            const active = k.id === kind;
-            return (
-              <Pressable key={k.id} onPress={() => setKind(k.id)} style={[styles.chip, active && styles.chipActive]} testID={`resources-kind-${k.id}`}>
-                <Icon name={k.icon} size={14} color={active ? colors.onBrandPrimary : colors.onSurface} />
-                <Text style={[styles.chipText, active && { color: colors.onBrandPrimary }]}>{k.label}</Text>
-                {k.id === "saved" && savedCount > 0 && (
-                  <View style={styles.chipCount}><Text style={styles.chipCountText}>{savedCount}</Text></View>
-                )}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxl }}>
-        {isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : (
-          <>
-            {kind === "saved" && featured.length === 0 && latest.length === 0 && (
-              <View style={styles.empty}>
-                <Icon name="bookmark" size={32} color={colors.brandPrimary} />
-                <Text style={styles.emptyTitle}>Nothing saved yet</Text>
-                <Text style={styles.emptyText}>Tap the bookmark on any resource to save it here.</Text>
-              </View>
-            )}
-
-            {featured.length > 0 && (
-              <>
-                <Text style={styles.section}>Featured</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingRight: spacing.xl }}>
-                  {featured.map((r: any) => (
-                    <View key={r.id} style={styles.featured} testID={`resource-${r.id}`}>
-                      <Image source={{ uri: r.image_url }} style={styles.featuredImg} contentFit="cover" />
-                      <View style={styles.featuredBookmark}><BookmarkBtn resource={r} /></View>
-                      <View style={styles.featuredBody}>
-                        <View style={styles.kindPill}><Text style={styles.kindPillText}>{r.kind}</Text></View>
-                        <Text style={styles.featuredTitle} numberOfLines={2}>{r.title}</Text>
-                        <Text style={styles.featuredSub} numberOfLines={2}>{r.summary}</Text>
-                        <View style={styles.readRow}>
-                          <Icon name="clock" size={11} color={colors.muted} />
-                          <Text style={styles.read}>{r.read_minutes} min read</Text>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
-              </>
-            )}
-
-            {latest.length > 0 && <Text style={[styles.section, { marginTop: spacing.xl }]}>{kind === "saved" ? "Saved" : "Latest resources"}</Text>}
-            {latest.map((r: any) => (
-              <View key={r.id} style={styles.row} testID={`resource-${r.id}`}>
-                <Image source={{ uri: r.image_url }} style={styles.rowImg} contentFit="cover" />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle} numberOfLines={2}>{r.title}</Text>
-                  <View style={styles.rowMetaRow}>
-                    <View style={[styles.kindPill, { backgroundColor: colors.surfaceTertiary }]}><Text style={[styles.kindPillText, { color: colors.onSurface }]}>{r.kind}</Text></View>
-                    <Text style={styles.read}>{r.read_minutes} min</Text>
-                  </View>
-                </View>
-                <BookmarkBtn resource={r} />
-              </View>
-            ))}
-          </>
-        )}
-      </ScrollView>
-    </View>
-  );
+  const [selected, setSelected] = useState<any>(null);
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ["resources"], queryFn: ResourcesAPI.list });
+  const { featured, latest } = useMemo(() => { let list = data || []; if (kind === "saved") list = list.filter((r: any) => r.saved); else if (kind !== "all") list = list.filter((r: any) => r.kind === kind); if (query.trim()) list = list.filter((r: any) => r.title.toLowerCase().includes(query.toLowerCase())); return { featured: list.filter((r: any) => r.featured), latest: list.filter((r: any) => !r.featured) }; }, [data, kind, query]);
+  return <View style={[styles.root, { paddingTop: insets.top }]}><View style={styles.header}><View style={styles.headerTitle}><ExploreBackButton testID="resources-back" /><Text style={styles.title}>{kind === "saved" ? "Saved resources" : "Resources"}</Text></View><Pressable testID="resources-saved" accessibilityLabel="Saved resources" onPress={() => setKind(kind === "saved" ? "all" : "saved")}><Icon name="bookmark" size={22} color={colors.brandPrimary} /></Pressable></View><View style={styles.sticky}><View style={styles.search}><Icon name="search" size={16} color={colors.muted} /><TextInput style={styles.searchInput} placeholder="Search resources…" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} testID="resources-search" /></View><View style={styles.filters}>{FILTERS.map(filter => <Pressable key={filter.id} style={styles.filter} onPress={() => setKind(filter.id)} testID={`resources-kind-${filter.id}`}><View style={[styles.categoryIcon, kind === filter.id && { backgroundColor: colors.surfaceTertiary }]}><Icon name={filter.icon as React.ComponentProps<typeof Icon>["name"]} size={19} color={kind === filter.id ? colors.brandPrimary : colors.muted} /></View><Text style={styles.filterLabel}>{filter.label}</Text></Pressable>)}</View></View><ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 24 }}>{isLoading ? <SkeletonCards /> : isError ? <EmptyState title="Couldn’t load resources" description="Check your connection and try again." action="Try again" onAction={() => { void refetch(); }} /> : !featured.length && !latest.length ? <EmptyState icon={kind === "saved" ? "bookmark" : "search"} title={kind === "saved" ? "Keep the good ideas" : "No resources found"} description={kind === "saved" ? "Tap a bookmark to save articles, guides, and videos." : "Try another keyword or category."} action={kind === "saved" ? "Explore resources" : "Clear search"} onAction={() => { setKind("all"); setQuery(""); }} /> : <>{!!featured.length && <><Text style={styles.section}>Featured Resources</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>{featured.map((resource: any) => <View key={resource.id} style={[styles.featured, { width: width - 48 }]} testID={`resource-${resource.id}`}><View style={styles.featuredBody}><Text style={styles.featuredTitle} numberOfLines={3}>{resource.title}</Text><Text style={styles.featuredSummary} numberOfLines={3}>{resource.summary}</Text><Pressable style={styles.readButton} onPress={() => setSelected(resource)}><Text style={styles.readButtonText}>{resource.kind === "article" ? "Read Article" : "View Resource"}</Text></Pressable></View><Image source={{ uri: resource.image_url }} style={styles.featuredImage} contentFit="cover" /></View>)}</ScrollView></>}{!!latest.length && <Text style={[styles.section, { marginTop: 24 }]}>Latest Resources</Text>}{latest.map((resource: any) => <View key={resource.id} style={styles.row} testID={`resource-${resource.id}`}><Pressable onPress={() => setSelected(resource)} accessibilityLabel={`Open ${resource.title}`}><Image source={{ uri: resource.image_url }} style={styles.rowImage} /></Pressable><Pressable style={{ flex: 1 }} onPress={() => setSelected(resource)}><Text style={styles.rowTitle} numberOfLines={2}>{resource.title}</Text><View style={styles.metaRow}><Text style={styles.kind}>{resource.kind}</Text><Text style={styles.read}>{resource.read_minutes} min read</Text></View></Pressable><Bookmark resource={resource} /></View>)}</>}</ScrollView><Sheet visible={!!selected} title={selected?.title || "Resource"} onClose={() => setSelected(null)}><Text style={[ui.body, { lineHeight: 24 }]}>{selected?.body || selected?.summary}</Text>{!selected?.body && <Text style={[ui.description, { marginTop: 16 }]}>Only a summary is available in the app.</Text>}{/^https:\/\//.test(selected?.source_url || "") && <ActionButton label="Open original resource" onPress={() => { void Linking.openURL(selected.source_url); }} />}<ActionButton label="Close" secondary onPress={() => setSelected(null)} /></Sheet></View>;
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md },
-  back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  title: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
-  iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  savedBadge: { position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.brandTertiary, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
-  savedBadgeText: { color: colors.onBrandTertiary, fontSize: 10, fontWeight: "700" },
-  sticky: { paddingHorizontal: spacing.xl, paddingBottom: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  search: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, height: 44, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
-  searchInput: { flex: 1, color: colors.onSurface, fontSize: 14 },
-  chipRow: { gap: spacing.sm, paddingVertical: spacing.sm },
-  chip: { flexShrink: 0, height: 34, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
-  chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  chipText: { color: colors.onSurface, fontSize: 12, fontWeight: "500" },
-  chipCount: { marginLeft: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.brandTertiary, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
-  chipCountText: { color: colors.onBrandTertiary, fontSize: 10, fontWeight: "700" },
-  section: { fontSize: 13, fontWeight: "700", color: colors.muted, marginBottom: spacing.md, textTransform: "uppercase", letterSpacing: 0.5 },
-  featured: { width: 260, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
-  featuredImg: { width: "100%", height: 130 },
-  featuredBookmark: { position: "absolute", top: 8, right: 8, width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
-  featuredBody: { padding: spacing.md, gap: 6 },
-  kindPill: { alignSelf: "flex-start", backgroundColor: colors.brandSecondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill },
-  kindPillText: { color: colors.onBrandSecondary, fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
-  featuredTitle: { fontWeight: "700", color: colors.onSurface, fontSize: 15 },
-  featuredSub: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-  readRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  read: { color: colors.muted, fontSize: 11 },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
-  rowImg: { width: 72, height: 72, borderRadius: radius.md },
-  rowTitle: { fontWeight: "700", color: colors.onSurface, marginBottom: 6 },
-  rowMetaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  empty: { alignItems: "center", padding: spacing.xxl, gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, marginBottom: spacing.lg },
-  emptyTitle: { fontWeight: "700", color: colors.onSurface },
-  emptyText: { color: colors.muted, textAlign: "center", fontSize: 13 },
-});
+const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: colors.surface }, header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 24, paddingTop: 20, paddingBottom: 20 }, headerTitle: { flexDirection: "row", alignItems: "center", gap: 8 }, title: { fontFamily: fonts.display, fontSize: 25, color: colors.onSurface }, sticky: { paddingHorizontal: 24 }, search: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: 12, height: 44, paddingHorizontal: 14 }, searchInput: { flex: 1, color: colors.onSurface, fontFamily: fonts.body, fontSize: 13 }, filters: { flexDirection: "row", marginTop: 16, marginBottom: 8, gap: 10 }, filter: { flex: 1, alignItems: "center", gap: 6 }, categoryIcon: { width: 48, height: 48, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }, filterLabel: { fontFamily: fonts.body, color: colors.muted, fontSize: 10, textAlign: "center" }, section: { fontFamily: fonts.body, fontSize: 16, color: colors.onSurface, marginBottom: 12 }, featured: { flexDirection: "row", backgroundColor: colors.surfaceTertiary, borderRadius: 16, overflow: "hidden", minHeight: 190 }, featuredBody: { flex: 1, padding: 14, gap: 10 }, featuredTitle: { fontFamily: fonts.display, color: colors.onSurface, fontSize: 18 }, featuredSummary: { fontFamily: fonts.body, color: colors.onSurface, fontSize: 11, lineHeight: 16 }, featuredImage: { width: "46%", height: "100%" }, readButton: { backgroundColor: colors.brandPrimary, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, alignSelf: "flex-start" }, readButtonText: { fontFamily: fonts.body, color: colors.onBrandPrimary, fontSize: 11 }, row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 10, borderRadius: radius.lg, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, marginBottom: 12 }, rowImage: { width: 76, height: 72, borderRadius: 10 }, rowTitle: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.onSurface, marginBottom: 12 }, metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm }, kind: { backgroundColor: colors.surfaceTertiary, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, color: colors.brandPrimary, fontFamily: fonts.body, fontSize: 10 }, read: { fontFamily: fonts.body, color: colors.muted, fontSize: 10 } });

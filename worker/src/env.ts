@@ -6,6 +6,8 @@ export interface Env {
   SANITY_DATASET: string;
   SANITY_API_VERSION: string;
   JWT_EXP_MINUTES: string;
+  ADMIN_USER_IDS?: string;
+  EXPO_ACCESS_TOKEN?: string;
 }
 
 export interface User {

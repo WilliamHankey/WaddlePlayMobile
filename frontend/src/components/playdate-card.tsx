@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, fonts, spacing, radius } from "@/src/theme";
 
 const CATEGORY_ICONS: Record<string, { name: any; bg: string; fg: string }> = {
   soccer: { name: "target", bg: colors.brandPrimary, fg: colors.onBrandPrimary },
@@ -12,7 +12,7 @@ const CATEGORY_ICONS: Record<string, { name: any; bg: string; fg: string }> = {
   sensory: { name: "heart", bg: colors.brandSecondary, fg: colors.onBrandSecondary },
 };
 
-export function PlaydateCard({ item, onPress, onJoin, testID }: { item: any; onPress: () => void; onJoin?: () => void; testID?: string }) {
+export function PlaydateCard({ item, onPress, onJoin, testID, showMatchDetails = false }: { item: any; onPress: () => void; onJoin?: () => void; testID?: string; showMatchDetails?: boolean }) {
   const cat = CATEGORY_ICONS[item.category] || CATEGORY_ICONS.park;
   const joined = item.joined || false;
   const attendeesCount = item.attendee_family_ids?.length || 0;
@@ -26,7 +26,7 @@ export function PlaydateCard({ item, onPress, onJoin, testID }: { item: any; onP
         <View style={styles.ageBadge} testID={`${testID}-age`}>
           <Text style={styles.ageText}>{item.age_range}</Text>
         </View>
-        {item.match_score != null && (
+        {showMatchDetails && item.match_score != null && (
           <View style={styles.matchBadge} testID={`${testID}-match`}>
             <Icon name="star" size={11} color={colors.onBrandSecondary} />
             <Text style={styles.matchText}>{item.match_score}% match</Text>
@@ -55,7 +55,7 @@ export function PlaydateCard({ item, onPress, onJoin, testID }: { item: any; onP
         <View style={styles.metaRow}><Icon name="calendar" size={14} color={colors.muted} /><Text style={styles.metaText}>{item.date}</Text></View>
         <View style={styles.metaRow}><Icon name="clock" size={14} color={colors.muted} /><Text style={styles.metaText}>{item.start_time} – {item.end_time}</Text></View>
 
-        {item.match_reasons && item.match_reasons.length > 0 && (
+        {showMatchDetails && item.match_reasons && item.match_reasons.length > 0 && (
           <View style={styles.reasonsRow} testID={`${testID}-reasons`}>
             <Icon name="check-circle" size={12} color={colors.brandPrimary} />
             <Text style={styles.reasonsLabel}>Why it matches:</Text>
@@ -72,7 +72,7 @@ export function PlaydateCard({ item, onPress, onJoin, testID }: { item: any; onP
             <Pressable testID={`${testID}-join`} style={[styles.joinBtn, { backgroundColor: btnBg }]} onPress={onJoin} disabled={joined}>
               <Text style={[styles.joinText, { color: btnFg }]}>{joined ? "Joined ✓" : "Request to Join"}</Text>
             </Pressable>
-            <Pressable style={styles.bookmark} hitSlop={8}>
+            <Pressable style={styles.bookmark} hitSlop={8} accessibilityLabel="View playdate details" onPress={onPress}>
               <Icon name="bookmark" size={18} color={colors.brandPrimary} />
             </Pressable>
           </View>
@@ -83,16 +83,16 @@ export function PlaydateCard({ item, onPress, onJoin, testID }: { item: any; onP
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, marginBottom: spacing.lg, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  image: { width: "100%", height: 180 },
+  card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg, overflow: "hidden" },
+  image: { width: "100%", height: 115 },
   ageBadge: { position: "absolute", top: spacing.md, right: spacing.md, backgroundColor: colors.surfaceInverse, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
   ageText: { color: colors.onSurfaceInverse, fontSize: 12, fontWeight: "600" },
   matchBadge: { position: "absolute", top: spacing.md, left: spacing.md, backgroundColor: colors.brandSecondary, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill, flexDirection: "row", alignItems: "center", gap: 4 },
   matchText: { color: colors.onBrandSecondary, fontSize: 12, fontWeight: "700" },
   body: { padding: spacing.lg },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.md },
-  catIcon: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
+  catIcon: { width: 30, height: 30, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
+  title: { fontFamily: fonts.bodyMedium, fontSize: 15, fontWeight: "400", color: colors.onSurface },
   attendees: { alignItems: "flex-end" },
   avatarStack: { flexDirection: "row" },
   avatar: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: colors.surfaceSecondary, backgroundColor: colors.surfaceTertiary },
@@ -100,9 +100,9 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: 4 },
   metaText: { color: colors.muted, fontSize: 13 },
   footer: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.md },
-  joinBtn: { flex: 1, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
+  joinBtn: { flex: 1, height: 38, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
   joinText: { fontSize: 14, fontWeight: "700" },
-  bookmark: { width: 44, height: 44, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  bookmark: { width: 28, height: 38, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
   reasonsRow: { marginTop: spacing.sm, backgroundColor: colors.surfaceTertiary, padding: spacing.sm, borderRadius: radius.md, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
   reasonsLabel: { fontSize: 11, fontWeight: "700", color: colors.brandPrimary, textTransform: "uppercase", letterSpacing: 0.3 },
   reasonChips: { flexDirection: "row", flexWrap: "wrap", gap: 4, flex: 1 },

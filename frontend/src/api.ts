@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import { loadFamilyDirectory, type FamilyFilters, type FamilyDirectory } from "./family-directory";
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const TOKEN_KEY = "waddleplay_token";
@@ -36,7 +37,7 @@ export async function api(path: string, init: RequestInit = {}): Promise<any> {
   const res = await fetch(`${API_URL}/api${path}`, { ...init, headers });
   const text = await res.text();
   const data = text ? (() => { try { return JSON.parse(text); } catch { return {}; } })() : {};
-  if (!res.ok) throw new ApiError(data.detail || `Request failed (${res.status})`, res.status);
+  if (!res.ok) throw new ApiError(typeof data.detail === "string" ? data.detail : Array.isArray(data.detail) ? data.detail.map((e: any) => e.msg).join(" · ") : `Request failed (${res.status})`, res.status);
   return data;
 }
 
@@ -44,6 +45,7 @@ export const AuthAPI = {
   signup: (email: string, password: string, name: string) => api("/auth/signup", { method: "POST", body: JSON.stringify({ email, password, name }) }),
   login: (email: string, password: string) => api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => api("/auth/me"),
+  changeEmail: (email: string, password: string) => api("/auth/email", { method: "POST", body: JSON.stringify({ email, password }) }),
 };
 
 export const ProfileAPI = {
@@ -69,6 +71,17 @@ export const PlaydatesAPI = {
 };
 
 export const FamilyAPI = {
+  directory: (params: FamilyFilters = {}): Promise<FamilyDirectory> => loadFamilyDirectory({
+    list: filters => FamilyAPI.list(filters),
+    playdates: () => PlaydatesAPI.list(),
+    family: async id => { try { return await FamilyAPI.get(id); } catch (error) { if (error instanceof ApiError && [403, 404].includes(error.status)) return null; throw error; } },
+    missingEndpoint: error => error instanceof ApiError && error.status === 404,
+  }, params),
+  list: (params: FamilyFilters = {}): Promise<any[]> => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+    return api(`/families?${query}`);
+  },
   get: (id: string) => api(`/families/${id}`),
 };
 
@@ -79,6 +92,7 @@ export const SafetyAPI = {
 };
 
 export const ForumAPI = {
+  create: (body: { title: string; body: string; topic: string }) => api("/forum", { method: "POST", body: JSON.stringify(body) }),
   list: () => api("/forum"),
   get: (id: string) => api(`/forum/${id}`),
 };
@@ -93,13 +107,33 @@ export const ResourcesAPI = {
 export const ThreadsAPI = {
   list: () => api("/threads"),
   get: (id: string) => api(`/threads/${id}`),
-  send: (id: string, text: string) => api(`/threads/${id}/messages`, { method: "POST", body: JSON.stringify({ text }) }),
+  send: (id: string, text: string, client_message_id?: string) => api(`/threads/${id}/messages`, { method: "POST", body: JSON.stringify({ text, client_message_id }) }),
   request: (target_family_id: string, opening_message: string) => api("/threads/request", { method: "POST", body: JSON.stringify({ target_family_id, opening_message }) }),
   accept: (id: string) => api(`/threads/${id}/accept`, { method: "POST" }),
   decline: (id: string) => api(`/threads/${id}/decline`, { method: "POST" }),
 };
 
+export type NotificationPreferences = { messages: boolean; playdates: boolean; community: boolean };
+export const LocationAPI = {
+  availability: async (): Promise<{ available: boolean; point: { latitude: number; longitude: number } | null }> => {
+    try { return { available: true, point: await api("/profile/location") }; }
+    catch (error) { if (error instanceof ApiError && error.status === 404) return { available: false, point: null }; throw error; }
+  },
+  get: () => api("/profile/location"),
+  save: (latitude: number, longitude: number) => api("/profile/location", { method: "PUT", body: JSON.stringify({ latitude, longitude }) }),
+  remove: () => api("/profile/location", { method: "DELETE" }),
+};
+export const VerificationAPI = {
+  get: () => api("/profile/verification"),
+  submit: (statement: string, consent: boolean) => api("/profile/verification", { method: "POST", body: JSON.stringify({ statement, consent }) }),
+  pending: () => api("/admin/verification"),
+  review: (id: string, status: "approved" | "rejected", reason: string) => api(`/admin/verification/${id}`, { method: "POST", body: JSON.stringify({ status, reason }) }),
+};
 export const NotificationsAPI = {
+  preferences: (): Promise<NotificationPreferences> => api("/notifications/preferences"),
+  savePreferences: (body: NotificationPreferences) => api("/notifications/preferences", { method: "PUT", body: JSON.stringify(body) }),
+  register: (token: string, platform: string) => api("/notifications/devices", { method: "POST", body: JSON.stringify({ token, platform }) }),
+  unregister: (token: string) => api("/notifications/devices", { method: "DELETE", body: JSON.stringify({ token }) }),
   list: () => api("/notifications"),
   readAll: () => api("/notifications/read-all", { method: "POST" }),
 };

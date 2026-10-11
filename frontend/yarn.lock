@@ -884,6 +884,19 @@
     parse-png "^2.1.0"
     semver "^7.6.0"
 
+"@expo/image-utils@^0.11.6":
+  version "0.11.6"
+  resolved "https://registry.yarnpkg.com/@expo/image-utils/-/image-utils-0.11.6.tgz#3cc751d9e90cc7510351928e9c2fc02709c0b1dc"
+  integrity sha512-rmMpn7QGp6pUGRCQ3vvB9RP/vqq2q/PpToRh4dL/FbhSZOLZ1YTotpuLHf71FGOEfgKil/4PCd3hkWe/CCeiEg==
+  dependencies:
+    "@expo/require-utils" "^57.0.6"
+    "@expo/spawn-async" "^1.8.0"
+    chalk "^4.0.0"
+    getenv "^2.0.0"
+    jimp-compact "0.16.1"
+    parse-png "^2.1.0"
+    semver "^7.6.0"
+
 "@expo/inline-modules@^0.1.7":
   version "0.1.7"
   resolved "https://registry.yarnpkg.com/@expo/inline-modules/-/inline-modules-0.1.7.tgz#43bc725ce4993496693040d30c36c38fe542cdd8"
@@ -1036,6 +1049,15 @@
   version "57.0.5"
   resolved "https://registry.yarnpkg.com/@expo/require-utils/-/require-utils-57.0.5.tgz#bde8d170b0b53fa1cd77aa73a305e5a16f4229a3"
   integrity sha512-kTAXj9lDFEIPMsbAOGCGbjBbMF0oi7CqkYM79KOX0DDD9wSwXmlKL1z2h8OwsrBf7mbOo2DjlRvZu4BEjrIxGw==
+  dependencies:
+    "@babel/code-frame" "^7.20.0"
+    "@babel/core" "^7.25.2"
+    "@babel/plugin-transform-modules-commonjs" "^7.24.8"
+
+"@expo/require-utils@^57.0.6":
+  version "57.0.6"
+  resolved "https://registry.yarnpkg.com/@expo/require-utils/-/require-utils-57.0.6.tgz#b6f0c38cca8261ec8aa8949bfe176fe3cdb26a55"
+  integrity sha512-PKWfFdMgwWrlSP6NGplCi2nK0dEM5MeJ2Cj1ijr5VWTmZ+pKsJsJw2dWkBtlFDyxMY8eUjCPZ7hoqFEnbc0Pcw==
   dependencies:
     "@babel/code-frame" "^7.20.0"
     "@babel/core" "^7.25.2"
@@ -1600,6 +1622,11 @@
   integrity sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg==
   dependencies:
     undici-types ">=7.24.0 <7.24.7"
+
+"@types/react-dom@~19.2.0":
+  version "19.2.7"
+  resolved "https://registry.yarnpkg.com/@types/react-dom/-/react-dom-19.2.7.tgz#eba78fc6201e564986ec40d56c86c8434593cace"
+  integrity sha512-I8bPpDLcHBv1qiIiXDCy71Rt8eQDKJP0sMSWJphDdAcdqiJ1sGpZamavoEIRZmYzjia9LuEb2HlYdDpmoENpvQ==
 
 "@types/react-test-renderer@^19.1.0":
   version "19.1.0"
@@ -2189,6 +2216,11 @@ babel-preset-expo@~57.0.12:
     babel-plugin-syntax-hermes-parser "^0.36.0"
     babel-plugin-transform-flow-enums "^0.0.2"
     debug "^4.3.4"
+
+badgin@^1.1.5:
+  version "1.2.3"
+  resolved "https://registry.yarnpkg.com/badgin/-/badgin-1.2.3.tgz#994b5f519827d7d5422224825b2c8faea2bc43ad"
+  integrity sha512-NQGA7LcfCpSzIbGRbkgjgdWkjy7HI+Th5VLxTJfW5EeaAf3fnS+xWQaQOCYiny+q6QSvxqoSO04vCx+4u++EJw==
 
 balanced-match@^1.0.0:
   version "1.0.2"
@@ -3126,6 +3158,11 @@ event-target-shim@^5.0.0:
   resolved "https://registry.yarnpkg.com/event-target-shim/-/event-target-shim-5.0.1.tgz#5d4d3ebdf9583d63a5333ce2deb7480ab2b05789"
   integrity sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ==
 
+expo-application@~57.0.3:
+  version "57.0.3"
+  resolved "https://registry.yarnpkg.com/expo-application/-/expo-application-57.0.3.tgz#92d3f386e5a02b978c377a24e7eb32d1fcee1edb"
+  integrity sha512-t/CxeLio0NjY9/cOak1tQp62/hAUjzJxmhR4rVUR7K5bb9YoEtfl1ZekTn+Iuh+dYOMYzF0l72ODMSmY3CR1NA==
+
 expo-asset@~57.0.18:
   version "57.0.18"
   resolved "https://registry.yarnpkg.com/expo-asset/-/expo-asset-57.0.18.tgz#c81177df21f2e84f88a1a5ca99292bd7ba425a55"
@@ -3154,6 +3191,20 @@ expo-constants@57.0.19, expo-constants@~57.0.18, expo-constants@~57.0.19:
   integrity sha512-3eK1kZRwCdMizQLlM/PPlPwjaPnB5qKvdRDMBMnB1ZxmvWJBf9TB4uEO4DMMfIPaFUxYFs29dsR5fPr1gh3FTQ==
   dependencies:
     "@expo/env" "~2.4.3"
+
+expo-constants@~57.0.21:
+  version "57.0.21"
+  resolved "https://registry.yarnpkg.com/expo-constants/-/expo-constants-57.0.21.tgz#44867d264bec85147c808eba1d4635aad1e11d52"
+  integrity sha512-D5fV2GELYGbNkoiEVZZp5zrUXZDaAx6ZzErDzGirm3jCjOhaE8iU/GyJiB0ZQE+K4Bg8gY82nIQ/RZR8CJLVjA==
+  dependencies:
+    "@expo/env" "~2.4.3"
+
+expo-device@~57.0.2:
+  version "57.0.2"
+  resolved "https://registry.yarnpkg.com/expo-device/-/expo-device-57.0.2.tgz#e6f015372e508d78c7d1ffb1e0a9f0bd366521ac"
+  integrity sha512-1A0/FICR3CgrH43FeiDQP3l5eHDmiMoh4EjXfhfoHHkMgdBQdyD0kwDWskiGZlQ3E0Nd0LHkCFH6vJ1ofm/jow==
+  dependencies:
+    ua-parser-js "^0.7.33"
 
 expo-doctor@1.19.8:
   version "1.19.8"
@@ -3207,6 +3258,13 @@ expo-linking@57.0.10:
     expo-constants "~57.0.18"
     invariant "^2.2.4"
 
+expo-location@~57.0.20:
+  version "57.0.20"
+  resolved "https://registry.yarnpkg.com/expo-location/-/expo-location-57.0.20.tgz#1862a3440d1fe785edb3f5681d8cc01761041d54"
+  integrity sha512-E9cr7A5eQS91bm3McMx3FiWy7SCorVTPLq9gLFFW+7dfuSqQp5FLNBZQ6NFJaS8tVhCyl2WyKMFh0TAo/+7K9Q==
+  dependencies:
+    "@expo/image-utils" "^0.11.5"
+
 expo-modules-autolinking@~57.0.13:
   version "57.0.13"
   resolved "https://registry.yarnpkg.com/expo-modules-autolinking/-/expo-modules-autolinking-57.0.13.tgz#64c93c919ff6207d5b2183fcc4e954a440baf8d2"
@@ -3230,6 +3288,17 @@ expo-modules-jsi@~57.1.0:
   version "57.1.0"
   resolved "https://registry.yarnpkg.com/expo-modules-jsi/-/expo-modules-jsi-57.1.0.tgz#21c1d3df20ea886e937a9ea2930699e34e164867"
   integrity sha512-a5ckeHfnbYfonhcHGkM0EU/a0Keh+/OufXy/HyFS+spr5Ib0N4Oh1ZsSYFQhp5xdOUFkVofKRhfH+VmcccIIpA==
+
+expo-notifications@~57.0.22:
+  version "57.0.22"
+  resolved "https://registry.yarnpkg.com/expo-notifications/-/expo-notifications-57.0.22.tgz#3a1c5e34392140a5a2f28dac101f700466b58cf8"
+  integrity sha512-JVZCyY660d7L5bKcNK8J3/ghG70WtyRYlvAQgAISlgRCt3QWhghhodx/j+nRAPcfc2mmCzUjNB0Ck+LbzpBEMg==
+  dependencies:
+    "@expo/image-utils" "^0.11.6"
+    abort-controller "^3.0.0"
+    badgin "^1.1.5"
+    expo-application "~57.0.3"
+    expo-constants "~57.0.21"
 
 expo-router@57.0.22:
   version "57.0.22"
@@ -6225,6 +6294,11 @@ typescript@6.0.3:
   version "6.0.3"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-6.0.3.tgz#90251dc007916e972786cb94d74d15b185577d21"
   integrity sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==
+
+ua-parser-js@^0.7.33:
+  version "0.7.41"
+  resolved "https://registry.yarnpkg.com/ua-parser-js/-/ua-parser-js-0.7.41.tgz#9f6dee58c389e8afababa62a4a2dc22edb69a452"
+  integrity sha512-O3oYyCMPYgNNHuO7Jjk3uacJWZF8loBgwrfd/5LE/HyZ3lUIOdniQ7DNXJcIgZbwioZxk0fLfI4EVnetdiX5jg==
 
 ua-parser-js@^1.0.35:
   version "1.0.41"

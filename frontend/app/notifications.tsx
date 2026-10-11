@@ -4,8 +4,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, fonts, spacing, radius } from "@/src/theme";
 import { NotificationsAPI } from "@/src/api";
+import { EmptyState, Notice } from "@/src/components/screen-ui";
 
 const ICON_TINT: Record<string, string> = {
   playdate_join: colors.brandPrimary,
@@ -19,7 +20,7 @@ export default function Notifications() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["notifications"], queryFn: NotificationsAPI.list });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ["notifications"], queryFn: NotificationsAPI.list, refetchInterval: 30000 });
   const readMut = useMutation({ mutationFn: NotificationsAPI.readAll, onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }) });
 
   return (
@@ -33,23 +34,24 @@ export default function Notifications() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxl }}>
-        {isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : (data || []).length === 0 ? (
+        {readMut.isError && <Notice error>Couldn’t mark notifications as read.</Notice>}
+        {isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : isError ? <EmptyState title="Couldn’t load notifications" description="Check your connection." action="Try again" onAction={() => { void refetch(); }} /> : (data || []).length === 0 ? (
           <View style={styles.empty}>
             <Icon name="bell-off" size={32} color={colors.brandPrimary} />
             <Text style={styles.emptyTitle}>You&apos;re all caught up</Text>
           </View>
         ) : (data || []).map((n: any) => (
-          <View key={n.id} style={[styles.row, n.unread && styles.rowUnread]} testID={`notification-${n.id}`}>
+          <Pressable key={n.id} style={[styles.row, n.unread && styles.rowUnread]} testID={`notification-${n.id}`} onPress={() => { if (typeof n.route === "string" && /^(\/messages\/[\w-]+|\/playdate\/[\w-]+|\/verification)$/.test(n.route)) router.push(n.route as any); }}>
             <View style={[styles.icon, { backgroundColor: (ICON_TINT[n.kind] || colors.brandPrimary) }]}>
-              <Icon name={n.icon} size={16} color={colors.onBrandPrimary} />
+              <Icon name={n.kind === "messages" ? "message-circle" : n.kind === "playdates" ? "calendar" : "shield"} size={16} color={colors.onBrandPrimary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.rowTitle}>{n.title}</Text>
               <Text style={styles.rowBody}>{n.body}</Text>
-              <Text style={styles.rowAt}>{n.at}</Text>
+              <Text style={styles.rowAt}>{new Date(n.at).toLocaleString()}</Text>
             </View>
-            {n.unread && <View style={styles.dot} />}
-          </View>
+            {!!n.unread && <View style={styles.dot} />}
+          </Pressable>
         ))}
       </ScrollView>
     </View>
@@ -60,7 +62,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md },
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  title: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
+  title: { fontFamily: fonts.display, fontSize: 22, fontWeight: "400", color: colors.onSurface },
   markAll: { color: colors.brandPrimary, fontWeight: "600", fontSize: 13 },
   row: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md, padding: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
   rowUnread: { borderColor: colors.brandPrimary },

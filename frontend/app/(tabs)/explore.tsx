@@ -1,192 +1,84 @@
-import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator, Dimensions } from "react-native";
+import React, { useState } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Switch } from "react-native";
 import { Image } from "expo-image";
+import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
-import { PlaydatesAPI } from "@/src/api";
-import { PlaydateCard } from "@/src/components/playdate-card";
-import { TopBar } from "@/src/components/top-bar";
+import { colors, fonts, spacing, radius } from "@/src/theme";
+import { ApiError, FamilyAPI, LocationAPI, ProfileAPI } from "@/src/api";
+import { FamilyMap } from "@/src/components/family-map";
+import { ActionButton, EmptyState, Sheet, Notice, ui, SkeletonCards } from "@/src/components/screen-ui";
 
 const CATEGORIES = [
-  { id: "all", label: "All", icon: "grid" as const },
-  { id: "soccer", label: "Sports", icon: "target" as const },
-  { id: "art", label: "Art", icon: "edit-3" as const },
-  { id: "park", label: "Outdoors", icon: "sun" as const },
-  { id: "music", label: "Music", icon: "music" as const },
-  { id: "sensory", label: "Sensory", icon: "heart" as const },
+  { id: "soccer", label: "Sports", icon: "target" as const, bg: "#FFF1E5" },
+  { id: "paint", label: "Arts", icon: "edit-3" as const, bg: "#FFF4D8" },
+  { id: "music", label: "Music", icon: "music" as const, bg: "#E8F0F5" },
+  { id: "nature", label: "Nature", icon: "feather" as const, bg: "#EDF3DE" },
+  { id: "book", label: "Books", icon: "book-open" as const, bg: "#EAF2F3" },
 ];
-
-// Static positions for map pins (percentages relative to map image size)
-const PIN_POS: Record<string, { top: string; left: string }> = {
-  "pd-soccer": { top: "22%", left: "28%" },
-  "pd-art": { top: "40%", left: "62%" },
-  "pd-park": { top: "58%", left: "20%" },
-  "pd-music": { top: "70%", left: "70%" },
-  "pd-sensory": { top: "35%", left: "42%" },
-};
-
-const MAP_BG = "https://images.unsplash.com/photo-1524661135-423995f22d0b?w=800&auto=format";
 
 export default function Explore() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [category, setCategory] = useState<string>("all");
+  const qc = useQueryClient();
+  const [category, setCategory] = useState("");
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"list" | "map">("list");
   const [pinId, setPinId] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<"filters" | "location" | "manual" | null>(null);
+  const [age, setAge] = useState<number | null>(null);
+  const [radiusKm, setRadiusKm] = useState(10);
+  const [draftAge, setDraftAge] = useState<number | null>(null);
+  const [draftRadius, setDraftRadius] = useState(10);
+  const [draftInterest, setDraftInterest] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [locationError, setLocationError] = useState("");
+  const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: ProfileAPI.getMe });
+  const { data: locationState, isError: locationFailed } = useQuery({ queryKey: ["location"], queryFn: LocationAPI.availability });
+  const point = locationState?.point ?? null;
+  const params = { ...(point ? { latitude: point.latitude, longitude: point.longitude, radius: radiusKm } : {}), ...(age !== null ? { age_min: age, age_max: age === 0 ? 3 : age === 4 ? 6 : 10 } : {}), ...(category ? { interest: category } : {}) };
+  const { data: directory, isLoading, isError, error: directoryError, refetch } = useQuery({ queryKey: ["nearby-families", params], queryFn: () => FamilyAPI.directory(params) });
+  const locationAvailable = locationState?.available === true && !directory?.limited;
+  const nearby = (directory?.families || []).filter((f: any) => f.id !== profile?.id && `${f.parent_name} ${f.location} ${(f.interests || []).join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const errorDescription = directoryError instanceof ApiError ? (directoryError.status === 401 ? "Your session has expired. Please sign in again." : directoryError.status >= 500 ? "The server couldn’t load families. Please try again shortly." : directoryError.message) : "Check your connection and try again.";
+  const selected = nearby.find((f: any) => f.id === pinId);
+  const saveLocation = async (lat: number, lon: number) => {
+    if (!locationAvailable) throw new Error("Location sharing requires the updated API. You can still browse verified families.");
+    const saved = await LocationAPI.save(lat, lon);
+    qc.setQueryData(["location"], { available: true, point: saved });
+    qc.invalidateQueries({ queryKey: ["nearby-families"] });
+    setSheet(null); setLocationError("");
+  };
+  const locate = async () => {
+    setBusy(true); setLocationError("");
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!permission.granted) throw new Error("Location permission was not granted. Choose a location manually or enable permission in Settings.");
+      const position = await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Location timed out. Try again or choose a location manually.")), 15000))]);
+      await saveLocation(position.coords.latitude, position.coords.longitude);
+    } catch (error) { setLocationError(error instanceof Error ? error.message : "Couldn’t find your location."); }
+    finally { setBusy(false); }
+  };
+  const manual = async () => { setBusy(true); setLocationError(""); try { if (!latitude.trim() || !longitude.trim()) throw new Error("Enter both latitude and longitude, or select a city."); await saveLocation(Number(latitude), Number(longitude)); } catch (error) { setLocationError(error instanceof Error ? error.message : "Couldn’t save your location."); } finally { setBusy(false); } };
+  const openFilters = () => { setDraftAge(age); setDraftRadius(radiusKm); setDraftInterest(category); setSheet("filters"); };
+  const reset = () => { setCategory(""); setAge(null); setRadiusKm(10); setQuery(""); setSheet(null); };
+  const chip = (label: string, active: boolean, onPress: () => void, disabled = false) => <Pressable key={label} disabled={disabled} onPress={onPress} style={[styles.filterChip, active && styles.filterChipActive, disabled && { opacity: 0.5 }]} accessibilityRole="button" accessibilityState={{ selected: active, disabled }}><Text style={{ fontFamily: fonts.body, color: active ? colors.brandPrimary : colors.onSurface }}>{label}</Text></Pressable>;
+  const familyCard = (f: any) => <Pressable key={f.id} testID={`explore-family-${f.id}`} onPress={() => router.push(`/family/${f.id}`)} style={styles.family}><View style={styles.avatar}>{f.avatar_url ? <Image source={{ uri: f.avatar_url }} style={styles.avatar} /> : <Text style={{ fontFamily: fonts.bodyMedium, fontSize: 22, color: colors.brandPrimary }}>{f.parent_name?.charAt(0)}</Text>}</View><View style={{ flex: 1 }}><Text style={styles.familyName}>{f.parent_name}</Text><Text style={styles.familyMeta}>{(f.children || []).map((c: any) => `${c.age} years`).join(" · ")} <Text style={{ color: colors.brandPrimary }}> · Verified</Text></Text><View style={styles.tags}>{(f.interests || []).slice(0, 3).map((interest: string) => <Text key={interest} style={styles.tag}>{interest}</Text>)}</View></View>{f.distance_km != null && <Text style={styles.distance}>⌖ {f.distance_km} km</Text>}</Pressable>;
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["playdates", category],
-    queryFn: () => PlaydatesAPI.list(category === "all" ? undefined : { category }),
-  });
-
-  const filtered = useMemo(() => {
-    const list = data || [];
-    if (!query.trim()) return list;
-    const q = query.toLowerCase();
-    return list.filter((p: any) =>
-      p.title.toLowerCase().includes(q) ||
-      p.location.toLowerCase().includes(q) ||
-      (p.sensory_friendly_tags || []).some((t: string) => t.toLowerCase().includes(q)) ||
-      (p.interests || []).some((t: string) => t.toLowerCase().includes(q))
-    );
-  }, [data, query]);
-
-  const selectedPin = pinId ? filtered.find((p: any) => p.id === pinId) : null;
-
-  return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <TopBar />
-      <View style={styles.sticky}>
-        <Text style={styles.title}>Explore</Text>
-
-        <View style={styles.tabsRow}>
-          <Pressable testID="explore-tab-list" style={[styles.tabBtn, tab === "list" && styles.tabBtnActive]} onPress={() => setTab("list")}>
-            <Icon name="list" size={16} color={tab === "list" ? colors.onBrandPrimary : colors.onSurface} />
-            <Text style={[styles.tabText, tab === "list" && { color: colors.onBrandPrimary }]}>List</Text>
-          </Pressable>
-          <Pressable testID="explore-tab-map" style={[styles.tabBtn, tab === "map" && styles.tabBtnActive]} onPress={() => setTab("map")}>
-            <Icon name="map" size={16} color={tab === "map" ? colors.onBrandPrimary : colors.onSurface} />
-            <Text style={[styles.tabText, tab === "map" && { color: colors.onBrandPrimary }]}>Map</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.search}>
-          <Icon name="search" size={18} color={colors.muted} />
-          <TextInput testID="explore-search" style={styles.searchInput} placeholder="Search sensory, interests, place" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} />
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          {CATEGORIES.map((c) => {
-            const active = c.id === category;
-            return (
-              <Pressable key={c.id} testID={`chip-${c.id}`} onPress={() => setCategory(c.id)} style={[styles.chip, active && styles.chipActive]}>
-                <Icon name={c.icon} size={14} color={active ? colors.onBrandPrimary : colors.onSurface} />
-                <Text style={[styles.chipText, active && { color: colors.onBrandPrimary }]}>{c.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {tab === "list" ? (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.xxl }} showsVerticalScrollIndicator={false}>
-          {isLoading ? (
-            <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} /></View>
-          ) : filtered.length === 0 ? (
-            <View style={styles.empty}>
-              <Icon name="search" size={36} color={colors.brandPrimary} />
-              <Text style={styles.emptyTitle}>No matches</Text>
-              <Text style={styles.emptyText}>Try a different category or search.</Text>
-            </View>
-          ) : (
-            filtered.map((p: any) => (
-              <PlaydateCard key={p.id} item={p} testID={`explore-card-${p.id}`} onPress={() => router.push(`/playdate/${p.id}`)} />
-            ))
-          )}
-        </ScrollView>
-      ) : (
-        <View style={styles.mapWrap} testID="explore-map">
-          <Image source={{ uri: MAP_BG }} style={styles.mapImg} contentFit="cover" />
-          <View style={styles.mapTint} pointerEvents="none" />
-          {filtered.map((p: any) => {
-            const pos = PIN_POS[p.id] || { top: `${20 + Math.random() * 60}%`, left: `${20 + Math.random() * 60}%` };
-            return (
-              <Pressable
-                key={p.id}
-                testID={`map-pin-${p.id}`}
-                style={[styles.pin, { top: pos.top as any, left: pos.left as any }]}
-                onPress={() => setPinId(p.id)}
-              >
-                <View style={styles.pinInner}>
-                  <Text style={styles.pinText}>{p.match_score}%</Text>
-                </View>
-                <View style={styles.pinTail} />
-              </Pressable>
-            );
-          })}
-
-          {selectedPin && (
-            <View style={styles.bubble} testID="map-bubble">
-              <Pressable style={styles.bubbleClose} onPress={() => setPinId(null)} testID="map-bubble-close">
-                <Icon name="x" size={14} color={colors.onSurface} />
-              </Pressable>
-              <Image source={{ uri: selectedPin.image_url }} style={styles.bubbleImg} contentFit="cover" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bubbleTitle} numberOfLines={1}>{selectedPin.title}</Text>
-                <Text style={styles.bubbleMeta} numberOfLines={1}><Icon name="user" size={11} color={colors.muted} /> {selectedPin.host_name}</Text>
-                <Text style={styles.bubbleMeta} numberOfLines={1}><Icon name="map-pin" size={11} color={colors.muted} /> {selectedPin.location}</Text>
-                <View style={styles.bubbleFooter}>
-                  <View style={styles.matchPill}><Text style={styles.matchPillText}>{selectedPin.match_score}% match</Text></View>
-                  <Pressable style={styles.viewBtn} onPress={() => router.push(`/playdate/${selectedPin.id}`)} testID="map-bubble-view">
-                    <Text style={styles.viewBtnText}>View</Text>
-                    <Icon name="chevron-right" size={14} color={colors.onBrandPrimary} />
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
-      )}
-    </View>
-  );
+  return <View style={[styles.root, { paddingTop: insets.top }]}><View style={styles.header}><View style={styles.headingRow}><Text style={styles.title}>Explore</Text><Pressable accessibilityLabel="Notifications" onPress={() => router.push("/notifications")}><Icon name="bell" size={24} color={colors.brandPrimary} /></Pressable></View><Text style={styles.subtitle}>Discover playdates, activities and families near you.</Text><View style={styles.searchRow}><View style={styles.search}><Icon name="search" size={17} color={colors.muted} /><TextInput testID="explore-search" style={styles.searchInput} placeholder="Search playdates, activities, families..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} /></View><Pressable testID="explore-filters" style={styles.filter} onPress={openFilters}><Icon name="filter" size={16} color={colors.brandPrimary} /><Text style={styles.filterText}>Filter</Text></Pressable></View><View style={styles.communityLinks}><Pressable testID="explore-forum" style={styles.communityLink} onPress={() => router.push("/forum")}><Icon name="message-square" size={18} color={colors.brandPrimary} /><Text style={styles.filterText}>Forum</Text><Icon name="chevron-right" size={16} color={colors.brandPrimary} /></Pressable><Pressable testID="explore-resources" style={styles.communityLink} onPress={() => router.push("/resources")}><Icon name="book-open" size={18} color={colors.brandPrimary} /><Text style={styles.filterText}>Resources</Text><Icon name="chevron-right" size={16} color={colors.brandPrimary} /></Pressable></View><View style={styles.locationRow}><Icon name="map-pin" size={16} color={colors.muted} /><Text style={[styles.familyMeta, { flex: 1 }]}>{!locationAvailable ? "Browse verified families" : point ? profile?.location || "Your nearby area" : "Choose your location"}</Text><Pressable disabled={!locationAvailable} accessibilityLabel="Change location" onPress={() => { setLocationError(""); setSheet("location"); }}><Text style={[styles.filterText, !locationAvailable && { color: colors.muted }]}>Change</Text></Pressable></View><View style={styles.tabsRow}>{(["list", "map"] as const).map(t => <Pressable key={t} testID={`explore-tab-${t}`} onPress={() => { setTab(t); if (t === "map" && !point && locationAvailable) setSheet("location"); }} style={[styles.tab, t === tab && styles.tabActive]}><Icon name={t === "list" ? "list" : "map"} size={15} color={t === tab ? colors.brandPrimary : colors.muted} /><Text style={{ fontFamily: fonts.body, color: t === tab ? colors.brandPrimary : colors.muted }}>{t === "list" ? "List" : "Map"}</Text></Pressable>)}</View></View>
+    {tab === "list" ? <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8, paddingBottom: 24 }}>{directory?.limited && <Text style={styles.availabilityNote}>Showing verified playdate hosts. Nearby maps need the API update.</Text>}<View style={styles.sectionRow}><Text style={styles.sectionTitle}>Browse by category</Text><Pressable onPress={reset}><Text style={styles.filterText}>See all</Text></Pressable></View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 12 }}>{CATEGORIES.map(c => <Pressable key={c.id} onPress={() => setCategory(category === c.id ? "" : c.id)} style={styles.category}><View style={[styles.categoryIcon, { backgroundColor: c.bg }, category === c.id && { borderColor: colors.brandPrimary, borderWidth: 1 }]}><Icon name={c.icon} size={21} color={colors.brandPrimary} /></View><Text style={styles.categoryLabel}>{c.label}</Text></Pressable>)}</ScrollView><View style={[styles.sectionRow, { marginTop: 20, marginBottom: 12 }]}><Text style={styles.sectionTitle}>{directory?.limited ? "Verified Families" : "Nearby Families"}</Text><Pressable onPress={reset}><Text style={styles.filterText}>See all</Text></Pressable></View>{isLoading ? <SkeletonCards /> : isError ? <EmptyState title="Couldn’t load families" description={errorDescription} action="Try again" onAction={() => { void refetch(); }} /> : !nearby.length ? <EmptyState title="No families found" description="Try increasing the distance or changing your filters to find your kind of play." action="Reset filters" onAction={reset} /> : nearby.map(familyCard)}<View style={styles.trust}><Icon name="shield" size={28} color={colors.brandPrimary} /><View style={{ flex: 1 }}><Text style={styles.familyName}>Safe. Verified. Trusted.</Text><Text style={[styles.familyMeta, { lineHeight: 18 }]}>All families go through our community review process for your peace of mind.</Text><Pressable onPress={() => router.push("/verification")}><Text style={[styles.filterText, { marginTop: 8 }]}>Learn more</Text></Pressable></View></View></ScrollView> : <View style={styles.mapWrap}>{!locationAvailable ? <EmptyState icon="map" title="Nearby maps aren’t available yet" description="The deployed API doesn’t support location sharing yet. You can still browse verified families in List view." action="Show families" onAction={() => setTab("list")} secondary="Check again" onSecondary={() => { void refetch(); qc.invalidateQueries({ queryKey: ["location"] }); }} /> : point ? <FamilyMap center={point} families={nearby} onSelect={setPinId} /> : <EmptyState icon="map-pin" title="Find families near you" description="Allow location access to discover verified families nearby. Your exact home address is never shared." action="Allow location access" onAction={locate} secondary="Choose location manually" onSecondary={() => setSheet("manual")} />}{(isError || locationFailed) && <View style={styles.mapNotice}><Notice error>{isError ? errorDescription : "Couldn’t load your location. Please try again."}</Notice><ActionButton label="Try again" onPress={() => { void refetch(); qc.invalidateQueries({ queryKey: ["location"] }); }} /></View>}{selected && <View style={styles.mapPreview}><Pressable accessibilityLabel="Close family preview" onPress={() => setPinId(null)} style={{ alignSelf: "flex-end" }}><Icon name="x" size={18} color={colors.muted} /></Pressable><Text style={styles.familyName}>{selected.parent_name}</Text><Text style={styles.familyMeta}>{(selected.children || []).map((child: any) => `${child.age} years`).join(" · ")}{selected.distance_km != null ? ` · ${selected.distance_km} km` : ""}</Text><View style={styles.tags}>{(selected.interests || []).slice(0, 2).map((interest: string) => <Text style={styles.tag} key={interest}>{interest}</Text>)}</View><ActionButton label="View Profile" onPress={() => router.push(`/family/${selected.id}`)} /></View>}<View style={styles.mapSafety}><Text style={styles.familyMeta}>Only verified families appear on the map. Locations are approximate.</Text></View></View>}
+    <Sheet visible={sheet === "filters"} title="Find your kind of play" description="Choose what matters to your family. Only verified families are shown." onClose={() => setSheet(null)}><Text style={ui.label}>Distance</Text><View style={styles.tags}>{[1, 5, 10].map(r => chip(`${r} km`, draftRadius === r, () => setDraftRadius(r), !locationAvailable || !point))}</View><Text style={ui.label}>Child age</Text><View style={styles.tags}>{[[0, "0–3 years"], [4, "4–6 years"], [7, "7–10 years"]].map(([value, label]) => chip(String(label), draftAge === value, () => setDraftAge(draftAge === value ? null : value as number)))}</View><Text style={ui.label}>Interests</Text><View style={styles.tags}>{[["soccer", "Soccer"], ["draw", "Drawing"], ["book", "Reading"]].map(([id, label]) => chip(label, draftInterest === id, () => setDraftInterest(draftInterest === id ? "" : id)))}</View><View style={[styles.locationRow, { marginTop: 20 }]}><Text style={[ui.body, { flex: 1 }]}>Verified families only</Text><Switch disabled value trackColor={{ true: colors.brandPrimary }} /></View>{!point && <Text style={ui.description}>{locationAvailable ? "Choose a location to filter by distance." : "Distance filters require the updated location API."}</Text>}<ActionButton label="Show families" onPress={() => { setAge(draftAge); setRadiusKm(draftRadius); setCategory(draftInterest); setSheet(null); }} /><ActionButton label="Reset filters" secondary onPress={reset} /></Sheet>
+    <Sheet visible={sheet === "location"} title="Find families near you" description="Allow location access to discover verified families nearby. Your exact home address is never shared." onClose={() => { if (!busy) setSheet(null); }}>{!!locationError && <Notice error>{locationError}</Notice>}<ActionButton label="Allow location access" loading={busy} onPress={locate} /><ActionButton label="Choose location manually" secondary disabled={busy} onPress={() => { setLocationError(""); setSheet("manual"); }} /><Text style={[ui.description, { marginTop: 20 }]}>You can change this any time in Settings. Only approximate coordinates are shared.</Text></Sheet>
+    <Sheet visible={sheet === "manual"} title="Choose your location" description="Select your area or enter coordinates. We round your location before sharing it." onClose={() => { if (!busy) setSheet(null); }}><View style={styles.tags}>{[["Cape Town", -33.92, 18.42], ["Johannesburg", -26.2, 28.04], ["Durban", -29.86, 31.02]].map(([label, lat, lon]) => chip(String(label), latitude === String(lat), () => { setLatitude(String(lat)); setLongitude(String(lon)); }))}</View><Text style={ui.label}>Latitude</Text><TextInput style={ui.input} value={latitude} onChangeText={setLatitude} placeholder="-33.92" keyboardType="numbers-and-punctuation" /><Text style={ui.label}>Longitude</Text><TextInput style={ui.input} value={longitude} onChangeText={setLongitude} placeholder="18.42" keyboardType="numbers-and-punctuation" />{!!locationError && <Notice error>{locationError}</Notice>}<ActionButton label="Use this location" loading={busy} onPress={manual} /></Sheet>
+  </View>;
 }
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface },
-  sticky: { paddingHorizontal: spacing.xl, paddingBottom: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  title: { fontSize: 26, fontWeight: "800", color: colors.onSurface, marginTop: spacing.sm, marginBottom: spacing.md },
-  tabsRow: { flexDirection: "row", gap: spacing.sm, backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, padding: 4, marginBottom: spacing.md },
-  tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 36, borderRadius: radius.pill },
-  tabBtnActive: { backgroundColor: colors.brandPrimary },
-  tabText: { color: colors.onSurface, fontWeight: "600" },
-  search: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, height: 44, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
-  searchInput: { flex: 1, color: colors.onSurface, fontSize: 14 },
-  chipRow: { gap: spacing.sm, paddingVertical: spacing.sm },
-  chip: { flexShrink: 0, height: 36, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 },
-  chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  chipText: { color: colors.onSurface, fontSize: 13, fontWeight: "500" },
-  center: { alignItems: "center", padding: spacing.xxl },
-  empty: { alignItems: "center", padding: spacing.xxl, gap: spacing.md },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: colors.onSurface },
-  emptyText: { color: colors.muted, textAlign: "center" },
-  mapWrap: { flex: 1, backgroundColor: colors.surfaceTertiary },
-  mapImg: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
-  mapTint: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(94,135,109,0.15)" },
-  pin: { position: "absolute" },
-  pinInner: { backgroundColor: colors.brandPrimary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, borderWidth: 2, borderColor: colors.surfaceSecondary, minWidth: 44, alignItems: "center" },
-  pinText: { color: colors.onBrandPrimary, fontWeight: "700", fontSize: 11 },
-  pinTail: { alignSelf: "center", width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: "transparent", borderRightColor: "transparent", borderTopColor: colors.brandPrimary, marginTop: -1 },
-  bubble: { position: "absolute", left: spacing.xl, right: spacing.xl, bottom: spacing.xl, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.md, flexDirection: "row", gap: spacing.md, borderWidth: 1, borderColor: colors.border },
-  bubbleClose: { position: "absolute", top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center", zIndex: 1 },
-  bubbleImg: { width: 72, height: 72, borderRadius: radius.md },
-  bubbleTitle: { fontWeight: "700", color: colors.onSurface, marginBottom: 4 },
-  bubbleMeta: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  bubbleFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.sm },
-  matchPill: { backgroundColor: colors.brandSecondary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
-  matchPillText: { color: colors.onBrandSecondary, fontSize: 11, fontWeight: "700" },
-  viewBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.brandPrimary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill },
-  viewBtnText: { color: colors.onBrandPrimary, fontWeight: "700", fontSize: 12 },
+  availabilityNote: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 16 },
+  communityLinks: { flexDirection: "row", gap: 12, marginTop: 12 },
+  communityLink: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 12, borderRadius: 13, backgroundColor: colors.surfaceTertiary },
+  root: { flex: 1, backgroundColor: colors.surface }, header: { paddingHorizontal: 24, paddingTop: 16 }, headingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, title: { fontFamily: fonts.display, fontSize: 30, color: colors.onSurface }, subtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, marginTop: 8, marginBottom: 20, lineHeight: 18 }, searchRow: { flexDirection: "row", gap: 12 }, search: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, height: 44, borderWidth: 1, borderColor: colors.border, borderRadius: 13, backgroundColor: colors.surfaceSecondary, paddingHorizontal: 12 }, searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 12, color: colors.onSurface }, filter: { flexDirection: "row", alignItems: "center", gap: 6, padding: 12, borderRadius: 13, backgroundColor: colors.surfaceTertiary }, filterText: { fontFamily: fonts.body, color: colors.brandPrimary, fontSize: 13 }, locationRow: { flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 16 }, tabsRow: { flexDirection: "row", padding: 3, height: 46, borderWidth: 1, borderColor: colors.border, borderRadius: 11, marginBottom: 16 }, tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 8 }, tabActive: { backgroundColor: "#E8EDE3" }, sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, sectionTitle: { fontFamily: fonts.bodyMedium, color: colors.onSurface, fontSize: 16 }, category: { alignItems: "center", gap: 8, width: 62 }, categoryIcon: { width: 54, height: 52, alignItems: "center", justifyContent: "center", borderRadius: 13 }, categoryLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.onSurface }, family: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderWidth: 1, borderColor: colors.border, borderRadius: 16, marginBottom: 12, backgroundColor: colors.surfaceSecondary }, avatar: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary }, familyName: { fontFamily: fonts.bodyMedium, color: colors.onSurface, fontSize: 14 }, familyMeta: { fontFamily: fonts.body, fontSize: 12, color: colors.muted, marginVertical: 5 }, tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 }, tag: { fontFamily: fonts.body, color: colors.brandPrimary, fontSize: 10, backgroundColor: colors.surfaceTertiary, borderRadius: 10, paddingVertical: 3, paddingHorizontal: 7 }, distance: { alignSelf: "flex-start", fontFamily: fonts.body, fontSize: 10, color: colors.muted, backgroundColor: "#F9F4EB", padding: 5, borderRadius: 12 }, trust: { flexDirection: "row", gap: 12, padding: 16, borderRadius: 16, backgroundColor: "#F0F3EC", marginTop: 8, alignItems: "center" }, filterChip: { padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 20 }, filterChipActive: { backgroundColor: colors.surfaceTertiary, borderColor: colors.brandPrimary }, mapWrap: { flex: 1, backgroundColor: colors.surfaceTertiary, minHeight: 260 }, mapPreview: { position: "absolute", bottom: 65, left: 24, width: 170, padding: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border }, mapSafety: { position: "absolute", bottom: 8, left: 16, right: 16, backgroundColor: "#F1F5EF", borderRadius: 16, padding: 10 }, mapNotice: { position: "absolute", top: 12, left: 16, right: 16, padding: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: 16 },
 });

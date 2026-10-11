@@ -1,133 +1,49 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, fonts, radius } from "@/src/theme";
 import { ProfileAPI } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
+import { AddChildSheet } from "@/src/components/add-child-sheet";
+import { ActionButton, EmptyState, Sheet, Notice, SkeletonCards, ui } from "@/src/components/screen-ui";
 
-const SENSORY_OPTIONS = ["quiet", "small groups", "outdoors", "predictable routine", "sensory play", "movement", "music", "flexible"];
-const INTEREST_OPTIONS = ["painting", "music", "soccer", "lego", "nature", "animals", "books", "swimming", "drums", "trampoline", "sensory play", "hiking"];
-const VALUE_OPTIONS = ["neurodiversity-affirming", "kindness", "patience", "outdoors", "inclusion", "creativity", "movement-friendly", "AAC-friendly"];
-const COMM_OPTIONS = ["verbal", "AAC", "mixed"];
-
-function TagPicker({ label, options, value, onChange, tone = "primary" }: { label: string; options: string[]; value: string[]; onChange: (v: string[]) => void; tone?: "primary" | "secondary" | "tertiary" }) {
-  const bg = tone === "primary" ? colors.brandPrimary : tone === "secondary" ? colors.brandSecondary : colors.brandTertiary;
-  const fg = tone === "primary" ? colors.onBrandPrimary : tone === "secondary" ? colors.onBrandSecondary : colors.onBrandTertiary;
-  const toggle = (o: string) => onChange(value.includes(o) ? value.filter((v) => v !== o) : [...value, o]);
-  return (
-    <View style={{ marginBottom: spacing.lg }}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.chips}>
-        {options.map((o) => {
-          const active = value.includes(o);
-          return (
-            <Pressable key={o} onPress={() => toggle(o)} style={[styles.chip, { borderColor: bg }, active && { backgroundColor: bg }]} testID={`edit-chip-${o}`}>
-              <Text style={[styles.chipText, active && { color: fg }]}>{o}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
+const TAGS = { sensory_preferences: ["quiet", "small groups", "outdoors", "predictable routine", "sensory play", "movement", "music", "flexible"], interests: ["painting", "music", "soccer", "lego", "nature", "animals", "books", "swimming", "hiking"], family_values: ["kindness", "patience", "inclusion", "creativity", "neurodiversity-affirming"] };
+type Draft = { parent_name: string; location: string; bio: string; avatar_url: string | null; sensory_preferences: string[]; interests: string[]; family_values: string[]; communication_style: string };
+function Field({ label, icon, value, onChange, multiline, error, testID, email }: { label: string; icon: React.ComponentProps<typeof Icon>["name"]; value: string; onChange: (text: string) => void; multiline?: boolean; error?: boolean; testID?: string; email?: boolean }) {
+  return <View style={[styles.field, multiline && { alignItems: "flex-start" }, error && { borderColor: colors.error }]}><View style={styles.fieldIcon}><Icon name={icon} size={17} color={colors.brandPrimary} /></View><View style={{ flex: 1 }}><Text style={styles.fieldLabel}>{label}</Text><TextInput testID={testID} accessibilityLabel={label} style={[styles.input, multiline && { minHeight: 88, textAlignVertical: "top" }]} multiline={multiline} value={value} onChangeText={onChange} autoCapitalize={email ? "none" : "sentences"} keyboardType={email ? "email-address" : "default"} /></View><Icon name="edit-2" size={15} color={colors.muted} /></View>;
 }
-
 export default function ProfileEdit() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["profile"], queryFn: ProfileAPI.getMe });
-
-  const [parentName, setParentName] = useState("");
-  const [location, setLocation] = useState("");
-  const [bio, setBio] = useState("");
-  const [sensory, setSensory] = useState<string[]>([]);
-  const [interests, setInterests] = useState<string[]>([]);
-  const [values, setValues] = useState<string[]>([]);
-  const [comm, setComm] = useState<string>("verbal");
-
+  const { user, changeEmail } = useAuth();
+  const [draft, setDraft] = useState<Draft>({ parent_name: "", location: "", bio: "", avatar_url: null, sensory_preferences: [], interests: [], family_values: [], communication_style: "verbal" });
+  const [email, setEmail] = useState(user?.email || "");
+  const [password, setPassword] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [addingChild, setAddingChild] = useState(false);
+  const [validation, setValidation] = useState("");
+  const initialized = useRef(false);
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ["profile"], queryFn: ProfileAPI.getMe });
   useEffect(() => {
-    if (data) {
-      setParentName(data.parent_name || "");
-      setLocation(data.location || "");
-      setBio(data.bio || "");
-      setSensory(data.sensory_preferences || []);
-      setInterests(data.interests || []);
-      setValues(data.family_values || []);
-      setComm(data.communication_style || "verbal");
+    if (data && !initialized.current) {
+      initialized.current = true;
+      setDraft({ parent_name: data.parent_name || "", location: data.location || "", bio: data.bio || "", avatar_url: data.avatar_url || null, sensory_preferences: data.sensory_preferences || [], interests: data.interests || [], family_values: data.family_values || [], communication_style: data.communication_style || "verbal" });
     }
   }, [data]);
-
-  const mut = useMutation({
-    mutationFn: () => ProfileAPI.update({
-      parent_name: parentName,
-      location,
-      bio,
-      sensory_preferences: sensory,
-      interests,
-      family_values: values,
-      communication_style: comm,
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["profile"] });
-      router.back();
-    },
-  });
-
-  if (isLoading) return <View style={[styles.root, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>;
-
-  return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable style={styles.back} onPress={() => router.back()} testID="edit-back">
-          <Icon name="arrow-left" size={20} color={colors.onSurface} />
-        </Pressable>
-        <Text style={styles.title}>Edit profile</Text>
-        <Pressable style={styles.saveBtn} onPress={() => mut.mutate()} disabled={mut.isPending} testID="edit-save">
-          {mut.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={styles.saveText}>Save</Text>}
-        </Pressable>
-      </View>
-
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxl + 40 }} keyboardShouldPersistTaps="handled">
-        <Text style={styles.label}>Parent name</Text>
-        <TextInput style={styles.input} value={parentName} onChangeText={setParentName} placeholder="Your name" placeholderTextColor={colors.muted} testID="edit-name" />
-
-        <Text style={styles.label}>Location</Text>
-        <TextInput style={styles.input} value={location} onChangeText={setLocation} placeholder="City, neighborhood" placeholderTextColor={colors.muted} testID="edit-location" />
-
-        <Text style={styles.label}>About your family</Text>
-        <TextInput style={[styles.input, styles.textarea]} multiline value={bio} onChangeText={setBio} placeholder="Tell other families about your kids and what a good playdate looks like." placeholderTextColor={colors.muted} testID="edit-bio" />
-
-        <Text style={styles.label}>Communication style</Text>
-        <View style={styles.chips}>
-          {COMM_OPTIONS.map((c) => (
-            <Pressable key={c} onPress={() => setComm(c)} style={[styles.chip, { borderColor: colors.brandPrimary }, comm === c && { backgroundColor: colors.brandPrimary }]} testID={`edit-comm-${c}`}>
-              <Text style={[styles.chipText, comm === c && { color: colors.onBrandPrimary }]}>{c}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={{ height: spacing.lg }} />
-        <TagPicker label="Sensory preferences" options={SENSORY_OPTIONS} value={sensory} onChange={setSensory} tone="primary" />
-        <TagPicker label="Interests" options={INTEREST_OPTIONS} value={interests} onChange={setInterests} tone="secondary" />
-        <TagPicker label="Family values" options={VALUE_OPTIONS} value={values} onChange={setValues} tone="tertiary" />
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
+  const mutation = useMutation({ mutationFn: async () => { if (email.trim().toLowerCase() !== user?.email) await changeEmail(email.trim(), password); return ProfileAPI.update({ ...draft, parent_name: draft.parent_name.trim() }); }, onSuccess: () => { qc.invalidateQueries({ queryKey: ["profile"] }); setValidation(""); setPassword(""); setConfirmEmail(false); } });
+  const change = <K extends keyof Draft>(field: K, value: Draft[K]) => { mutation.reset(); setDraft(d => ({ ...d, [field]: value })); };
+  const save = () => { if (!draft.parent_name.trim()) { setValidation("Enter your full name."); return; } if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setValidation("Enter a valid email address."); return; } setValidation(""); if (email.trim().toLowerCase() !== user?.email) { setConfirmEmail(true); return; } mutation.mutate(); };
+  return <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}><View style={[styles.header, { paddingTop: insets.top + 16 }]}><Pressable onPress={() => router.back()} accessibilityLabel="Back" testID="edit-back"><Icon name="chevron-left" size={24} color={colors.brandPrimary} /></Pressable><Text style={styles.title}>Edit Profile</Text><Pressable testID="edit-save" style={styles.save} disabled={mutation.isPending || isLoading || isError} onPress={save}><Text style={styles.saveText}>{mutation.isPending ? "Saving…" : mutation.isSuccess ? "Saved ✓" : "Save"}</Text></Pressable></View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, paddingBottom: insets.bottom + 32 }}>{isLoading ? <SkeletonCards /> : isError ? <EmptyState title="Couldn’t load profile" description="Check your connection." action="Try again" onAction={() => { void refetch(); }} /> : <><Pressable style={styles.portraitWrap} onPress={() => { setPhotoUrl(draft.avatar_url || ""); setPhotoOpen(true); }} accessibilityLabel="Change profile photo">{draft.avatar_url ? <Image source={{ uri: draft.avatar_url }} style={styles.portrait} /> : <View style={[styles.portrait, styles.initial]}><Text style={{ fontFamily: fonts.display, fontSize: 36, color: colors.brandPrimary }}>{draft.parent_name.charAt(0)}</Text></View>}<View style={styles.camera}><Icon name="camera" size={20} color={colors.brandPrimary} /></View></Pressable><Text style={styles.photoHint}>Tap to change photo</Text>{!!validation && <Notice error>{validation}</Notice>}{mutation.isError && <Notice error>{mutation.error.message}</Notice>}{mutation.isSuccess && <Notice>Your profile has been updated.</Notice>}<Field label="Full Name" icon="user" value={draft.parent_name} onChange={value => change("parent_name", value)} testID="edit-name" /><Field label="Email" icon="mail" email value={email} onChange={value => { mutation.reset(); setEmail(value); }} testID="edit-email" error={validation.includes("email")} /><Field label="Location" icon="map-pin" value={draft.location} onChange={value => change("location", value)} testID="edit-location" /><Field label="Bio" icon="file-text" value={draft.bio} onChange={value => change("bio", value)} testID="edit-bio" multiline /><View style={styles.sectionRow}><Text style={styles.sectionTitle}>My Children</Text><Pressable testID="edit-add-child" onPress={() => setAddingChild(true)}><Text style={styles.link}>Add Child +</Text></Pressable></View>{(data?.children || []).map((child: any, index: number) => <View key={child._key || `${child.name}-${index}`} style={styles.child}><View style={styles.childAvatar}><Icon name="smile" size={24} color={colors.brandPrimary} /></View><View style={{ flex: 1 }}><Text style={styles.childName}>{child.name}</Text><Text style={styles.childMeta}>{child.age} years old</Text></View></View>)}<View style={styles.sectionRow}><Text style={styles.sectionTitle}>Interests & Activities</Text></View>{(Object.keys(TAGS) as (keyof typeof TAGS)[]).map(key => <View key={key} style={{ marginBottom: 16 }}>{key !== "interests" && <Text style={styles.fieldLabel}>{key === "sensory_preferences" ? "Sensory preferences" : "Family values"}</Text>}<View style={styles.chips}>{TAGS[key].map(tag => <Pressable key={tag} onPress={() => change(key, draft[key].includes(tag) ? draft[key].filter(t => t !== tag) : [...draft[key], tag])} style={[styles.chip, draft[key].includes(tag) && styles.chipSelected]}><Text style={{ fontFamily: fonts.body, fontSize: 12, color: colors.brandPrimary }}>{tag}</Text></Pressable>)}</View></View>)}</>}</ScrollView>
+    <Sheet visible={confirmEmail} title="Confirm email change" description="Enter your current password to update your sign-in email. Other sessions will be signed out. This changes your login address; it does not verify ownership of the new mailbox." onClose={() => { if (!mutation.isPending) { setConfirmEmail(false); setPassword(""); } }}><Text style={ui.label}>Current password</Text><TextInput testID="email-password" style={ui.input} secureTextEntry autoComplete="current-password" value={password} onChangeText={setPassword} />{mutation.isError && <Notice error>{mutation.error.message}</Notice>}<ActionButton label="Confirm & save" testID="email-confirm" loading={mutation.isPending} disabled={!password} onPress={() => mutation.mutate()} /><ActionButton label="Cancel" secondary disabled={mutation.isPending} onPress={() => { setConfirmEmail(false); setPassword(""); }} /></Sheet>
+    <Sheet visible={photoOpen} title="Profile photo" description="Use a public HTTPS photo URL. Never link identity documents or private files." onClose={() => setPhotoOpen(false)}><TextInput style={ui.input} value={photoUrl} onChangeText={setPhotoUrl} autoCapitalize="none" placeholder="https://..." /><ActionButton label="Use photo" disabled={!!photoUrl && !/^https:\/\//.test(photoUrl)} onPress={() => { change("avatar_url", photoUrl.trim() || null); setPhotoOpen(false); }} /></Sheet>
+    <AddChildSheet visible={addingChild} onClose={() => setAddingChild(false)} existingChildren={data?.children || []} />
+  </KeyboardAvoidingView>;
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surfaceSecondary },
-  back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
-  saveBtn: { paddingHorizontal: spacing.md, height: 36, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", minWidth: 64 },
-  saveText: { color: colors.onBrandPrimary, fontWeight: "700" },
-  label: { fontSize: 13, fontWeight: "700", color: colors.muted, marginBottom: 6, marginTop: spacing.sm, textTransform: "uppercase", letterSpacing: 0.5 },
-  input: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, color: colors.onSurface, fontSize: 14, marginBottom: spacing.md },
-  textarea: { minHeight: 100, textAlignVertical: "top" },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, backgroundColor: colors.surfaceSecondary },
-  chipText: { fontSize: 13, color: colors.onSurface },
-});
+const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: colors.surface }, header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 24, paddingBottom: 8 }, title: { fontFamily: fonts.display, fontSize: 23, color: colors.onSurface }, save: { minWidth: 64, paddingHorizontal: 12, height: 38, borderRadius: 12, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" }, saveText: { fontFamily: fonts.bodyMedium, color: colors.onBrandPrimary, fontSize: 13 }, portraitWrap: { alignSelf: "center", width: 100, height: 100 }, portrait: { width: 100, height: 100, borderRadius: 50 }, initial: { backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }, camera: { position: "absolute", bottom: 0, right: 0, backgroundColor: colors.surfaceSecondary, borderRadius: 14, padding: 4 }, photoHint: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 12, marginBottom: 20 }, field: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surfaceSecondary, padding: 12, marginBottom: 12, minHeight: 64 }, fieldIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }, fieldLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.muted, marginBottom: 4 }, input: { fontFamily: fonts.body, fontSize: 14, color: colors.onSurface, minHeight: 26, padding: 0 }, sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 20, marginBottom: 12 }, sectionTitle: { fontFamily: fonts.body, color: colors.onSurface, fontSize: 16 }, link: { fontFamily: fonts.body, fontSize: 12, color: colors.brandPrimary }, child: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 12, marginBottom: 12 }, childAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#FAE7B8", alignItems: "center", justifyContent: "center" }, childName: { fontFamily: fonts.bodyMedium, color: colors.onSurface, fontSize: 14 }, childMeta: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, marginTop: 4 }, chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, chip: { paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill }, chipSelected: { backgroundColor: colors.surfaceTertiary, borderColor: colors.brandPrimary } });

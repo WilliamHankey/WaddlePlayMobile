@@ -26,8 +26,9 @@ private and unreadable without a token.
 
 ## Backend
 
-Sanity holds every app document; D1 holds only `users`, because the Sanity free
-plan only supports public datasets and password hashes must stay private.
+Sanity holds content documents. D1 keeps authentication, operational notification
+records, coarse locations, and community-review submissions private regardless
+of the content dataset's access mode.
 
 ```bash
 cd worker
@@ -51,6 +52,40 @@ npm run cleanup:d1     # D1: the smoke-test users
 
 `npm run smoke` is read-mostly but does write, so always follow it with
 `npm run cleanup` when pointing it at the production dataset.
+
+## Mobile integrations (free-tier setup)
+
+The new routes are implemented locally; deployment is separate. No exposed chat token is used by the implementation or tests.
+
+- **Email changes:** `POST /api/auth/email` requires the current password, prevents duplicate accounts, and revokes older sessions. This changes a sign-in address; it does **not** prove ownership of the new mailbox or send verification email.
+- **Discussions:** authenticated `POST /api/forum` writes a validated Sanity `forumPost` with the actual account author. Compose and error/success states are wired into the mobile Forum sheet.
+- **Verification:** new accounts start unverified. Introductions, consent, reviewer identity, and decisions are stored privately in D1. Allowlisted administrators review at `/admin/verification`; only approval changes the Sanity badge and unlocks joining/hosting. This is manual community review, **not government-ID verification or a background check**. Do not collect ID photos. Existing verified accounts are preserved.
+- **Location:** Expo foreground location permission or manually selected coordinates; only coordinates rounded to 0.01 degrees are stored/shared. Nearby filtering uses actual distances and Leaflet/OpenStreetMap with attribution. No paid map key or background tracking. OpenStreetMap's public tiles require fair use; do not bulk-download/offline-prefetch tiles. Location sharing can be removed in Settings.
+- **Notifications:** per-user in-app inbox, preferences, devices, and a retry/receipt outbox in D1. A five-minute Worker cron sends small batches through the free Expo push service. Events include chat requests/replies, acceptance, playdate join requests/decisions, and verification decisions. Lock-screen alerts contain no private message text. Expo/APNs/FCM receipts are provider acknowledgements, not guaranteed device delivery. No email notifications or scheduled event reminders are implemented.
+
+Before running the new Worker:
+
+```bash
+cd worker
+npm run db:migrate:local       # includes 0003_mobile_integrations.sql
+npm test                     # Node 22.14+: real in-memory SQLite, mocked Sanity/Expo; no production writes
+npm run typecheck
+# When ready to deploy:
+npm run db:migrate:remote
+npx wrangler secret put SANITY_TOKEN   # rotated server-side token; never EXPO_PUBLIC_*
+npx wrangler secret put ADMIN_USER_IDS # comma-separated D1 account IDs, not emails
+# Optional if Expo Push Security is enabled:
+npx wrangler secret put EXPO_ACCESS_TOKEN
+npm run deploy
+```
+
+Publish the edited local Studio schema separately (`cd studio && npm run deploy`). New private D1 tables must exist before the Worker is deployed. Do not run the old demo smoke script against production to verify these features: it predates unverified signups.
+
+For **free Android push**, create a Firebase project on the Spark plan and register `com.waddleplay.app`. Put the Firebase client `google-services.json` in `frontend/android/app/` locally; for GitHub APK builds, set repository secret `GOOGLE_SERVICES_JSON` to its JSON contents. Upload the **FCM v1 service-account credential** to the existing Expo project through Expo/EAS Credentials; never put that credential in the mobile bundle or repository. Test on a physical device using a rebuilt development/release APK, not Expo Go. The workflow still builds without Firebase configuration but warns that native push cannot work. Enable notifications from the designed Settings sheet to request device permission and register the token.
+
+In-app notifications and web maps remain free without Firebase. Expo web push is not implemented. Publishing iOS push requires Apple's developer/APNs credentials, which may require a paid Apple membership; use Android for a no-membership-cost deployment. All free services have quotas; this does not auto-upgrade any account or enable paid products.
+
+Security: keep the Sanity dataset private if it contains existing private chats or sensitive family fields. Worker authorization cannot protect records exposed directly by a public dataset. Legacy email/diagnosis content and legacy threads without participant IDs need a separate data audit; they are not silently migrated or deleted. Chat/notification routes are now account-scoped, and legacy threads without identifiable participants are not served.
 
 ## Studio
 

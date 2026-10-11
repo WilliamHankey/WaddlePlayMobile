@@ -3,8 +3,9 @@ import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Pla
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, fonts, spacing, radius } from "@/src/theme";
 import { useAuth } from "@/src/auth-context";
+import { BrandMark } from "@/src/components/brand-mark";
 
 export default function SignIn() {
   const insets = useSafeAreaInsets();
@@ -17,6 +18,9 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async () => {
+    if (loading) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("Enter a valid email address."); return; }
+    if (!password) { setError("Enter your password."); return; }
     setLoading(true); setError(null);
     try {
       await signIn(email.trim(), password);
@@ -30,18 +34,14 @@ export default function SignIn() {
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.xl }} keyboardShouldPersistTaps="handled">
         <View style={styles.brandRow}>
-          <View style={styles.brandBlocks}>
-            <View style={[styles.blk, { backgroundColor: colors.brandPrimary }]} />
-            <View style={[styles.blk, { backgroundColor: colors.brandSecondary }]} />
-            <View style={[styles.blk, { backgroundColor: colors.brandTertiary }]} />
-          </View>
+          <BrandMark />
           <Text style={styles.brandName}>WaddlePlay</Text>
         </View>
 
         <Text style={styles.title} testID="signin-title">Welcome back!</Text>
         <Text style={styles.subtitle}>Sign in to connect with playdate families you <Text style={{ color: colors.brandPrimary, fontWeight: "600" }}>trust.</Text></Text>
 
-        <Image source={{ uri: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800" }} style={styles.hero} />
+        <Image source={require("../../assets/images/design/generated-7.png")} style={styles.hero} />
 
         <View style={styles.field}>
           <Icon name="mail" size={18} color={colors.muted} />
@@ -76,7 +76,7 @@ export default function SignIn() {
         {error ? <Text testID="signin-error" style={styles.error}>{error}</Text> : null}
 
         <Pressable testID="signin-submit-button" style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.9 }]} onPress={onSubmit} disabled={loading}>
-          {loading ? <ActivityIndicator color={colors.onBrandPrimary} /> : (
+          {loading ? <><ActivityIndicator color={colors.onBrandPrimary} /><Text style={styles.primaryBtnText}>Signing in…</Text></> : (
             <>
               <Text style={styles.primaryBtnText}>Sign In</Text>
               <Icon name="arrow-right" size={18} color={colors.onBrandPrimary} />
@@ -106,10 +106,10 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginBottom: spacing.xl },
   brandBlocks: { flexDirection: "row", gap: 2 },
   blk: { width: 10, height: 10, borderRadius: 2 },
-  brandName: { fontSize: 22, fontWeight: "700", color: colors.onSurface },
-  title: { fontSize: 36, fontWeight: "800", color: colors.onSurface, textAlign: "center" },
-  subtitle: { fontSize: 15, color: colors.muted, textAlign: "center", marginTop: spacing.sm, marginBottom: spacing.lg, lineHeight: 22 },
-  hero: { width: "100%", height: 180, borderRadius: radius.lg, marginBottom: spacing.xl },
+  brandName: { fontFamily: fonts.body, fontSize: 26, fontWeight: "400", color: colors.onSurface },
+  title: { fontFamily: fonts.display, fontSize: 36, fontWeight: "400", color: colors.onSurface, textAlign: "center" },
+  subtitle: { fontFamily: fonts.body, fontSize: 18, color: colors.muted, textAlign: "center", marginTop: spacing.sm, marginBottom: spacing.lg, lineHeight: 22 },
+  hero: { width: "100%", height: 180, resizeMode: "contain", marginBottom: spacing.xl },
   field: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: spacing.lg, height: 56, marginBottom: spacing.md },
   input: { flex: 1, color: colors.onSurface, fontSize: 15 },
   error: { color: colors.error, marginBottom: spacing.sm, textAlign: "center" },

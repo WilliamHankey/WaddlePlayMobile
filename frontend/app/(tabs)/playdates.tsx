@@ -1,14 +1,13 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
-import { PlaydatesAPI } from "@/src/api";
-import { TopBar } from "@/src/components/top-bar";
+import { colors, fonts, spacing, radius } from "@/src/theme";
+import { PlaydatesAPI, ProfileAPI } from "@/src/api";
+import { EmptyState, SkeletonCards } from "@/src/components/screen-ui";
 import { Image } from "expo-image";
-import { useAuth } from "@/src/auth-context";
 
 function Row({ item, onPress, past }: { item: any; onPress: () => void; past: boolean }) {
   const attendees = item.attendee_family_ids?.length || 0;
@@ -40,24 +39,23 @@ function Row({ item, onPress, past }: { item: any; onPress: () => void; past: bo
 export default function PlaydatesTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
-  const { data, isLoading } = useQuery({ queryKey: ["playdates"], queryFn: () => PlaydatesAPI.list() });
+  const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: ProfileAPI.getMe });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ["playdates"], queryFn: () => PlaydatesAPI.list() });
 
   const { upcoming, past } = useMemo(() => {
     const list = data || [];
-    const mine = list.filter((p: any) => (p.attendee_family_ids || []).includes(user?.id));
-    // Fake "past" by taking any items not joined by me for demo, treat oldest as past
-    const past = list.slice(-2);
-    const upcoming = mine.length ? mine : list.slice(0, 3);
+    const mine = list.filter((p: any) => p.host_family_id === profile?.id || (p.attendee_family_ids || []).includes(profile?.id));
+    const today = new Date().toISOString().slice(0, 10);
+    const past = mine.filter((p: any) => p.date < today);
+    const upcoming = mine.filter((p: any) => p.date >= today);
     return { upcoming, past };
-  }, [data, user?.id]);
+  }, [data, profile?.id]);
 
   const items = tab === "upcoming" ? upcoming : past;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <TopBar />
       <View style={styles.header}>
         <Text style={styles.title}>Playdates</Text>
         <Pressable style={styles.addBtn} testID="pd-add" onPress={() => router.push("/playdate/create")}>
@@ -79,13 +77,9 @@ export default function PlaydatesTab() {
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl }}>
         <Text style={styles.section}>{tab === "upcoming" ? "Your upcoming playdates" : "Past playdates"}</Text>
         {isLoading ? (
-          <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} /></View>
-        ) : items.length === 0 ? (
-          <View style={styles.empty}>
-            <Icon name="calendar" size={32} color={colors.brandPrimary} />
-            <Text style={styles.emptyTitle}>{tab === "upcoming" ? "No upcoming playdates" : "No past playdates yet"}</Text>
-            <Text style={styles.emptyText}>{tab === "upcoming" ? "Browse Explore to find matched families." : "Playdates you attend will appear here."}</Text>
-          </View>
+          <SkeletonCards />
+        ) : isError ? <EmptyState title="Couldn’t load playdates" description="Please check your connection." action="Try again" onAction={() => { void refetch(); }} /> : items.length === 0 ? (
+          <EmptyState icon="calendar" title={tab === "upcoming" ? "Your next adventure awaits" : "No past playdates yet"} description={tab === "upcoming" ? "You haven’t joined a playdate yet. Discover something nearby or host one for your family." : "Playdates you attend will appear here."} action="Find playdates" onAction={() => router.push("/(tabs)/explore")} secondary="Create a playdate" onSecondary={() => router.push("/playdate/create")} />
         ) : (
           items.map((p: any) => <Row key={p.id} item={p} past={tab === "past"} onPress={() => router.push(`/playdate/${p.id}`)} />)
         )}
@@ -97,13 +91,13 @@ export default function PlaydatesTab() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, marginTop: spacing.sm },
-  title: { fontSize: 26, fontWeight: "800", color: colors.onSurface },
+  title: { fontFamily: fonts.display, fontSize: 32, fontWeight: "400", color: colors.onSurface },
   addBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   tabsRow: { flexDirection: "row", gap: spacing.sm, backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, padding: 4, marginHorizontal: spacing.xl, marginTop: spacing.md, marginBottom: spacing.lg },
   tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 36, borderRadius: radius.pill },
   tabBtnActive: { backgroundColor: colors.surfaceSecondary },
   tabText: { color: colors.muted, fontWeight: "600" },
-  section: { fontSize: 13, fontWeight: "700", color: colors.muted, marginBottom: spacing.md, textTransform: "uppercase", letterSpacing: 0.5 },
+  section: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.onSurface, marginBottom: spacing.md },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
   rowImg: { width: 90, height: 90, borderRadius: radius.md },
   rowHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, marginBottom: 4 },

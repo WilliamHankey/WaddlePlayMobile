@@ -54,6 +54,7 @@ function client(env: Env): SanityClient {
     // useCdn:false keeps read-after-write consistent (e.g. create then GET).
     // The free plan allows 250k API requests/month, ample at this scale.
     useCdn: false,
+    perspective: "published",
     token: env.SANITY_TOKEN,
   });
 }
@@ -84,6 +85,10 @@ export const repo = {
     if (!doc) return;
     await client(env).patch(doc._id).set(patch).commit();
   },
+
+  listVerifiedFamilies: async (env: Env): Promise<Doc[]> => toApiList(await client(env).fetch('*[_type == "family" && verified == true] | order(_id asc)[0...200]{_id,user_id,parent_name,avatar_url,location,bio,verified,interests,sensory_preferences,family_values,communication_style,children[]{_key,name,age,interests}}')),
+
+  blocksInvolving: async (env: Env, userId: string): Promise<Doc[]> => toApiList(await client(env).fetch('*[_type == "safetyBlock" && (user_id == $userId || target_family_id == $userId)]{_id,user_id,target_family_id}', { userId })),
 
   // ---------------- playdates ----------------
   listPlaydates: async (env: Env, category?: string): Promise<Doc[]> => {
@@ -186,9 +191,13 @@ export const repo = {
   },
 
   // ---------------- forum ----------------
+  createForumPost: async (env: Env, data: Doc): Promise<void> => {
+    const { id, ...rest } = data;
+    await client(env).create({ _id: ref(T.forumPost, String(id)), _type: T.forumPost, ...rest });
+  },
   listForumPosts: async (env: Env): Promise<Doc[]> =>
     toApiList(
-      await client(env).fetch('*[_type == $type] | order(hours_ago asc)', {
+      await client(env).fetch('*[_type == $type] | order(coalesce(created_at, _createdAt) desc)[0...100]{_id,title,body,topic,author_id,author_name,avatar_url,replies,hours_ago,created_at}', {
         type: T.forumPost,
       }),
     ),
@@ -232,12 +241,22 @@ export const repo = {
   },
 
   // ---------------- threads ----------------
-  listThreads: async (env: Env): Promise<Doc[]> =>
-    toApiList(
-      await client(env).fetch('*[_type == $type] | order(_createdAt asc)', {
-        type: T.thread,
-      }),
-    ),
+  listThreads: async (env: Env, userId: string): Promise<Doc[]> =>
+    toApiList(await client(env).fetch('*[_type == $type && defined(initiator_id) && (initiator_id == $userId || family_id == $userId)] | order(_updatedAt desc)[0...100]', { type: T.thread, userId })),
+
+  appendMessage: async (env: Env, id: string, message: Doc, recipientField: "unread_for_initiator" | "unread_for_recipient"): Promise<boolean> => {
+    const c = client(env);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const current = await c.fetch('*[_id == $id][0]{_rev,status,messages[]{_key,sender_id}}', { id: ref(T.thread, id) });
+      if (!current || current.status !== "active") throw new Error("Conversation is not active");
+      if (current.messages?.some((m: Doc) => m._key === message._key && m.sender_id === message.sender_id)) return false;
+      try {
+        await c.patch(ref(T.thread, id)).ifRevisionId(current._rev).setIfMissing({ messages: [], [recipientField]: 0 }).append("messages", [message]).set({ last: message.text, at: message.at }).inc({ [recipientField]: 1 }).commit();
+        return true;
+      } catch (error) { if ((error as { statusCode?: number }).statusCode !== 409 || attempt === 2) throw error; }
+    }
+    return false;
+  },
 
   threadById: async (env: Env, id: string): Promise<Doc | null> =>
     toApi(await client(env).fetch("*[_id == $id][0]", { id: ref(T.thread, id) })),

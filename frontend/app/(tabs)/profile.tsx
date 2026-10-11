@@ -1,191 +1,23 @@
-import React from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import React, { useState } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
-import { ProfileAPI, ResourcesAPI } from "@/src/api";
-import { useAuth } from "@/src/auth-context";
-import { TopBar } from "@/src/components/top-bar";
+import { colors, fonts, spacing, radius } from "@/src/theme";
+import { ProfileAPI, VerificationAPI } from "@/src/api";
+import { AddChildSheet } from "@/src/components/add-child-sheet";
+import { ActionButton, EmptyState, Notice, SkeletonCards } from "@/src/components/screen-ui";
 
-function Chip({ label, tone = "primary" }: { label: string; tone?: "primary" | "secondary" | "tertiary" }) {
-  const bg = tone === "primary" ? colors.brandPrimary : tone === "secondary" ? colors.brandSecondary : colors.brandTertiary;
-  const fg = tone === "primary" ? colors.onBrandPrimary : tone === "secondary" ? colors.onBrandSecondary : colors.onBrandTertiary;
-  return (
-    <View style={[styles.chip, { backgroundColor: bg }]}>
-      <Text style={[styles.chipText, { color: fg }]}>{label}</Text>
-    </View>
-  );
-}
-
+const PASTELS = ["#E8EEDB", "#FAE7B8", "#E5EDF6", "#DDEBD8", "#EEE5F4"];
 export default function Profile() {
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
   const router = useRouter();
-  const { data: profile, isLoading } = useQuery({ queryKey: ["profile"], queryFn: ProfileAPI.getMe });
-  const { data: saved } = useQuery({ queryKey: ["saved-resources"], queryFn: ResourcesAPI.saved });
-
-  if (isLoading || !profile) {
-    return (
-      <View style={[styles.root, { paddingTop: insets.top, alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color={colors.brandPrimary} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <TopBar />
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-      <View style={styles.headerRow}>
-        <Pressable style={styles.back} onPress={() => router.back()} testID="profile-back">
-          <Icon name="arrow-left" size={20} color={colors.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>My family</Text>
-        <Pressable style={styles.editBtnTop} onPress={() => router.push("/profile/edit")} testID="profile-edit-top">
-          <Icon name="edit-2" size={16} color={colors.brandPrimary} />
-        </Pressable>
-      </View>
-      <View style={styles.header}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>{(profile.parent_name || "P").charAt(0)}</Text></View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.name} testID="profile-name">{profile.parent_name}</Text>
-          <Text style={styles.email}>{user?.email}</Text>
-          <View style={styles.verifiedRow}>
-            <Icon name="shield" size={14} color={colors.brandPrimary} />
-            <Text style={styles.verifiedText}>Verified family</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Location</Text>
-        <View style={styles.metaRow}><Icon name="map-pin" size={14} color={colors.muted} /><Text style={styles.metaText}>{profile.location || "Not set"}</Text></View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About us</Text>
-        <Text style={styles.bio}>{profile.bio || "Add a short bio to help other families get to know you."}</Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Children</Text>
-        {profile.children?.length ? profile.children.map((c: any, i: number) => (
-          <View key={i} style={styles.childRow}>
-            <View style={styles.childAvatar}><Icon name="smile" size={18} color={colors.onBrandSecondary} /></View>
-            <View>
-              <Text style={styles.childName}>{c.name}, {c.age}</Text>
-              {c.diagnosis ? <Text style={styles.childMeta}>{c.diagnosis} • {c.communication_style || "verbal"}</Text> : null}
-            </View>
-          </View>
-        )) : <Text style={styles.muted}>No children added yet.</Text>}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Sensory preferences</Text>
-        <View style={styles.chips}>{(profile.sensory_preferences || []).map((p: string) => <Chip key={p} label={p} tone="primary" />)}</View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Interests</Text>
-        <View style={styles.chips}>{(profile.interests || []).map((p: string) => <Chip key={p} label={p} tone="secondary" />)}</View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Family values</Text>
-        <View style={styles.chips}>{(profile.family_values || []).map((p: string) => <Chip key={p} label={p} tone="tertiary" />)}</View>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.savedHeader}>
-          <Text style={styles.sectionTitle}>Saved resources</Text>
-          <Pressable onPress={() => router.push("/resources")} testID="profile-view-saved">
-            <Text style={styles.viewAll}>View all</Text>
-          </Pressable>
-        </View>
-        {(saved || []).length === 0 ? (
-          <Pressable style={styles.savedEmpty} onPress={() => router.push("/resources")} testID="profile-empty-saved">
-            <Icon name="bookmark" size={20} color={colors.brandPrimary} />
-            <Text style={styles.savedEmptyText}>Bookmark articles & guides so they build up here</Text>
-            <Icon name="chevron-right" size={16} color={colors.muted} />
-          </Pressable>
-        ) : (
-          <View>
-            {(saved || []).slice(0, 3).map((r: any) => (
-              <Pressable key={r.id} style={styles.savedRow} testID={`profile-saved-${r.id}`} onPress={() => router.push("/resources")}>
-                <View style={styles.savedIcon}><Icon name={r.kind === "video" ? "play-circle" : r.kind === "guide" ? "book-open" : "file-text"} size={16} color={colors.brandPrimary} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.savedTitle} numberOfLines={2}>{r.title}</Text>
-                  <Text style={styles.savedMeta}>{r.kind} · {r.read_minutes} min</Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Safety</Text>
-        <View style={styles.safetyRow}>
-          <Icon name="shield" size={18} color={colors.brandPrimary} />
-          <Text style={styles.safetyText}>Community-verified profile</Text>
-        </View>
-        <View style={styles.safetyRow}>
-          <Icon name="lock" size={18} color={colors.brandPrimary} />
-          <Text style={styles.safetyText}>Private by default — messages unlock after mutual accept</Text>
-        </View>
-        <View style={styles.safetyRow}>
-          <Icon name="slash" size={18} color={colors.brandPrimary} />
-          <Text style={styles.safetyText}>Block & report available on every profile</Text>
-        </View>
-      </View>
-
-      <Pressable testID="profile-signout" style={styles.signout} onPress={signOut}>
-        <Icon name="log-out" size={18} color={colors.error} />
-        <Text style={styles.signoutText}>Sign out</Text>
-      </Pressable>
-      </ScrollView>
-    </View>
-  );
+  const [addingChild, setAddingChild] = useState(false);
+  const { data: profile, isLoading, isError, refetch } = useQuery({ queryKey: ["profile"], queryFn: ProfileAPI.getMe, refetchInterval: query => query.state.data?.verified ? false : 30000 });
+  const { data: verification } = useQuery({ queryKey: ["verification"], queryFn: VerificationAPI.get, enabled: !!profile && !profile.verified });
+  return <LinearGradient colors={["#DCE8E0", "#FCFCFB", "#FCFCFB"]} locations={[0, 0.45, 1]} style={[styles.root, { paddingTop: insets.top }]}><ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }}><View style={styles.header}><Text style={styles.heading}>My Profile</Text><Pressable testID="profile-settings" accessibilityLabel="Settings" onPress={() => router.push("/settings")}><Icon name="settings" size={24} color={colors.brandPrimary} /></Pressable></View>{isLoading ? <SkeletonCards /> : isError || !profile ? <EmptyState title="Couldn’t load profile" description="Please check your connection." action="Try again" onAction={() => { void refetch(); }} /> : <><Pressable testID="profile-edit-top" style={styles.portraitWrap} onPress={() => router.push("/profile/edit")} accessibilityLabel="Edit profile photo">{profile.avatar_url ? <Image source={{ uri: profile.avatar_url }} style={styles.portrait} /> : <View style={[styles.portrait, styles.initial]}><Text style={{ fontFamily: fonts.display, fontSize: 36, color: colors.brandPrimary }}>{profile.parent_name?.charAt(0)}</Text></View>}<View style={styles.camera}><Icon name="camera" size={17} color={colors.brandPrimary} /></View></Pressable><View style={styles.infoCard}><Text style={styles.location}>⌖ {profile.location || "Add your location"}</Text><Text style={styles.name} testID="profile-name">{profile.parent_name}</Text><Pressable style={styles.verified} onPress={() => router.push("/verification")}><Icon name={profile.verified ? "shield" : "clock"} size={14} color={colors.brandPrimary} /><Text style={styles.verifiedText}>{profile.verified ? "Verified Parent" : verification?.status === "pending" ? "Verification pending" : "Verification required"}</Text></Pressable><Text style={styles.bio}>{profile.bio || "Tell other parents about your family and the activities you love."}</Text>{!profile.verified && <><Notice>Finish verification to join playdates and appear on the map.</Notice><Text style={styles.reviewNote}>Community review is manual. Never share identity documents in the app.</Text><ActionButton label="Complete verification" onPress={() => router.push("/verification")} /></>}<View style={styles.divider} /><View style={styles.sectionRow}><Text style={styles.sectionTitle}>My Children</Text><Pressable testID="profile-add-child" onPress={() => setAddingChild(true)}><Text style={styles.link}>Add Child +</Text></Pressable></View><View style={styles.children}>{(profile.children || []).map((child: any, index: number) => <Pressable key={child._key || `${child.name}-${index}`} style={styles.child} onPress={() => router.push("/profile/edit")}><View style={styles.childAvatar}><Icon name="smile" size={32} color={colors.brandPrimary} /><View style={styles.age}><Text style={styles.ageText}>{child.age}y</Text></View></View><Text style={styles.childName}>{child.name}</Text><Text style={styles.childMeta}>{(child.interests || []).slice(0, 2).join(" & ") || "Ready to play"}</Text></Pressable>)}</View>{!profile.children?.length && <Text style={styles.reviewNote}>Add a child to find age-appropriate playdates.</Text>}</View><View style={styles.interestCard}><View style={styles.sectionRow}><Text style={styles.sectionTitle}>Interests & Activities</Text><Pressable onPress={() => router.push("/profile/edit")}><Text style={styles.link}>Edit ✎</Text></Pressable></View><View style={styles.interests}>{(profile.interests || []).map((interest: string, index: number) => <Text key={interest} style={[styles.interest, { backgroundColor: PASTELS[index % PASTELS.length] }]}>{interest}</Text>)}</View><ActionButton label="+ Add More Interests" secondary onPress={() => router.push("/profile/edit")} /></View><AddChildSheet visible={addingChild} onClose={() => setAddingChild(false)} existingChildren={profile.children || []} /></>}</ScrollView></LinearGradient>;
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md },
-  back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  headerTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
-  editBtnTop: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.brandPrimary },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.lg, paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xl },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: colors.onBrandPrimary, fontSize: 28, fontWeight: "700" },
-  name: { fontSize: 22, fontWeight: "700", color: colors.onSurface },
-  email: { color: colors.muted, marginTop: 2 },
-  verifiedRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 6 },
-  verifiedText: { color: colors.brandPrimary, fontSize: 13, fontWeight: "600" },
-  section: { paddingHorizontal: spacing.xl, marginBottom: spacing.xl },
-  sectionTitle: { fontSize: 14, fontWeight: "700", color: colors.muted, marginBottom: spacing.sm, textTransform: "uppercase", letterSpacing: 0.5 },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  metaText: { color: colors.onSurface, fontSize: 15 },
-  bio: { color: colors.onSurface, lineHeight: 22 },
-  childRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
-  childAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandSecondary, alignItems: "center", justifyContent: "center" },
-  childName: { fontWeight: "700", color: colors.onSurface },
-  childMeta: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
-  chipText: { fontSize: 13, fontWeight: "600" },
-  safetyRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm },
-  safetyText: { color: colors.onSurface, flex: 1 },
-  muted: { color: colors.muted },
-  signout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginHorizontal: spacing.xl, marginTop: spacing.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.error, borderRadius: radius.lg },
-  signoutText: { color: colors.error, fontWeight: "700" },
-  savedHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
-  viewAll: { color: colors.brandPrimary, fontWeight: "600", fontSize: 13 },
-  savedEmpty: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
-  savedEmptyText: { flex: 1, color: colors.muted, fontSize: 13, lineHeight: 18 },
-  savedRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
-  savedIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
-  savedTitle: { fontWeight: "600", color: colors.onSurface, fontSize: 14 },
-  savedMeta: { color: colors.muted, fontSize: 12, marginTop: 2, textTransform: "capitalize" },
-});
+const styles = StyleSheet.create({ root: { flex: 1 }, header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 16, marginBottom: 12, zIndex: 2 }, heading: { fontFamily: fonts.display, fontSize: 23, color: colors.onSurface }, portraitWrap: { width: 100, height: 100, alignSelf: "center", zIndex: 2, marginTop: -8, marginBottom: -26 }, portrait: { width: 100, height: 100, borderRadius: 50 }, initial: { alignItems: "center", justifyContent: "center", backgroundColor: "#E7EEDB", borderWidth: 3, borderColor: colors.surfaceSecondary }, camera: { position: "absolute", bottom: 4, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }, infoCard: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, paddingTop: 44 }, location: { fontFamily: fonts.body, color: colors.muted, fontSize: 12, textAlign: "center", marginBottom: 12 }, name: { fontFamily: fonts.display, fontSize: 25, color: colors.onSurface, textAlign: "center" }, verified: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 12 }, verifiedText: { fontFamily: fonts.body, fontSize: 12, color: colors.brandPrimary }, bio: { fontFamily: fonts.body, color: colors.onSurface, fontSize: 14, lineHeight: 23, textAlign: "center", paddingHorizontal: 18, marginVertical: 24 }, divider: { height: 1, backgroundColor: colors.border, marginBottom: 20 }, sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }, sectionTitle: { fontFamily: fonts.body, fontSize: 16, color: colors.onSurface }, link: { fontFamily: fonts.body, fontSize: 12, color: colors.brandPrimary }, children: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, child: { width: 104, alignItems: "center", padding: 10, borderRadius: 13, borderWidth: 1, borderColor: colors.border }, childAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: "#FAF1D9", alignItems: "center", justifyContent: "center", marginBottom: 12 }, age: { position: "absolute", bottom: -2, right: -2, backgroundColor: "#EBC773", borderRadius: 12, padding: 5 }, ageText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.onSurface }, childName: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.onSurface }, childMeta: { fontFamily: fonts.body, color: colors.muted, fontSize: 10, marginTop: 5, textAlign: "center" }, interestCard: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: 16, marginTop: 16 }, interests: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 12 }, interest: { fontFamily: fonts.body, color: colors.brandPrimary, borderRadius: 16, paddingVertical: 6, paddingHorizontal: 12, fontSize: 12 }, reviewNote: { fontFamily: fonts.body, color: colors.muted, lineHeight: 20, marginBottom: spacing.sm, fontSize: 12 } });

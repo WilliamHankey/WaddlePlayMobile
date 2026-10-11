@@ -9,11 +9,13 @@ export const resource = defineType({
   fields: [
     defineField({ name: "title", title: "Title", type: "string", validation: (rule) => rule.required() }),
     defineField({ name: "summary", title: "Summary", type: "text", rows: 3 }),
+    defineField({ name: "body", title: "Full content", type: "text", rows: 12 }),
+    defineField({ name: "source_url", title: "Original resource URL", type: "url", validation: (rule) => rule.uri({ scheme: ["https"] }) }),
     defineField({
       name: "kind",
       title: "Kind",
       type: "string",
-      options: { list: ["article", "guide", "video"], layout: "radio" },
+      options: { list: ["article", "guide", "video", "service"], layout: "radio" },
     }),
     defineField({ name: "image_url", title: "Image URL", type: "url" }),
     defineField({ name: "read_minutes", title: "Read minutes", type: "number" }),

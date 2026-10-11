@@ -4,8 +4,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, fonts, spacing, radius } from "@/src/theme";
 import { PlaydatesAPI } from "@/src/api";
+import { ActionButton, ui } from "@/src/components/screen-ui";
 
 const CATEGORIES = [
   { id: "soccer", label: "Sports", icon: "target" as const },
@@ -48,8 +49,8 @@ export default function CreatePlaydate() {
       date,
       start_time: startTime,
       end_time: endTime,
-      age_min: parseInt(ageMin, 10) || 3,
-      age_max: parseInt(ageMax, 10) || 6,
+      age_min: Number(ageMin),
+      age_max: Number(ageMax),
       description,
       sensory_friendly_tags: sensory,
       interests,
@@ -63,7 +64,14 @@ export default function CreatePlaydate() {
     onError: (e: any) => setError(e?.message || "Could not create playdate"),
   });
 
-  const canSubmit = title.trim() && location.trim() && date.trim() && !mut.isPending;
+  const canSubmit = !!(title.trim() && location.trim() && date.trim() && !mut.isPending);
+  const submit = () => {
+    if (!canSubmit) return;
+    const parsed = new Date(`${date}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date || date < new Date().toISOString().slice(0, 10)) { setError("Enter a valid upcoming date (YYYY-MM-DD)."); return; }
+    if (!ageMin.trim() || !ageMax.trim() || !Number.isInteger(Number(ageMin)) || !Number.isInteger(Number(ageMax)) || Number(ageMin) < 0 || Number(ageMax) > 18 || Number(ageMin) > Number(ageMax)) { setError("Enter a valid age range between 0 and 18."); return; }
+    setError(null); mut.mutate();
+  };
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -71,10 +79,10 @@ export default function CreatePlaydate() {
         <Pressable style={styles.back} onPress={() => router.back()} testID="create-back">
           <Icon name="arrow-left" size={20} color={colors.onSurface} />
         </Pressable>
-        <Text style={styles.title}>Host a playdate</Text>
+        <Text style={styles.title}>Create a playdate</Text>
         <Pressable
           style={[styles.saveBtn, !canSubmit && { opacity: 0.5 }]}
-          onPress={() => canSubmit && mut.mutate()}
+          onPress={submit}
           disabled={!canSubmit}
           testID="create-submit"
         >
@@ -83,7 +91,8 @@ export default function CreatePlaydate() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxl }} keyboardShouldPersistTaps="handled">
-        <Text style={styles.label}>Playdate title</Text>
+        <Text style={ui.description}>Bring local families together. Your event will be visible to verified parents.</Text>
+        <Text style={styles.label}>Playdate name</Text>
         <TextInput testID="create-title" style={styles.input} placeholder="e.g. Gentle nature walk" placeholderTextColor={colors.muted} value={title} onChangeText={setTitle} />
 
         <Text style={styles.label}>Category</Text>
@@ -165,6 +174,8 @@ export default function CreatePlaydate() {
         <TextInput testID="create-private" style={[styles.input, styles.textarea]} multiline placeholder="e.g. Meet by the fountain. We&apos;ll bring a picnic blanket." placeholderTextColor={colors.muted} value={privateNote} onChangeText={setPrivateNote} />
 
         {error ? <Text testID="create-error" style={styles.error}>{error}</Text> : null}
+        <ActionButton label="Create playdate" onPress={submit} loading={mut.isPending} disabled={!canSubmit} />
+        <ActionButton label="Cancel" secondary disabled={mut.isPending} onPress={() => router.back()} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -174,7 +185,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surfaceSecondary },
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
+  title: { fontFamily: fonts.display, fontSize: 22, fontWeight: "400", color: colors.onSurface },
   saveBtn: { paddingHorizontal: spacing.md, height: 36, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", minWidth: 68 },
   saveText: { color: colors.onBrandPrimary, fontWeight: "700" },
   label: { fontSize: 12, fontWeight: "700", color: colors.muted, marginBottom: 6, marginTop: spacing.md, textTransform: "uppercase", letterSpacing: 0.5 },

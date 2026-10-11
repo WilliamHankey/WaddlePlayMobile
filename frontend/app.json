@@ -34,6 +34,8 @@
           "backgroundColor": "#F8F9FA"
         }
       ],
+      ["expo-location", { "locationWhenInUsePermission": "Allow WaddlePlay to find verified families nearby. Your exact home address is never shared." }],
+      ["expo-notifications", { "defaultChannel": "default", "color": "#48866F" }],
       "expo-font",
       "expo-image",
       "expo-secure-store",

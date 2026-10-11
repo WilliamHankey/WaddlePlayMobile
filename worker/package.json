@@ -7,6 +7,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
+    "test": "tsx --test tests/mobile-integrations.test.ts tests/family-directory.test.ts",
     "db:create": "wrangler d1 create waddleplay",
     "db:migrate:local": "wrangler d1 migrations apply waddleplay --local",
     "db:migrate:remote": "wrangler d1 migrations apply waddleplay --remote",

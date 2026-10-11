@@ -21,7 +21,7 @@ export const family = defineType({
       type: "string",
       validation: (rule) => rule.required(),
     }),
-    defineField({ name: "email", title: "Email", type: "string" }),
+    defineField({ name: "email", title: "Legacy email (private account email is in D1)", type: "string", readOnly: true, hidden: ({ value }) => value === undefined, deprecated: { reason: "Account email belongs in private D1, not the content dataset." } }),
     defineField({ name: "location", title: "Location", type: "string" }),
     defineField({ name: "bio", title: "Bio", type: "text", rows: 3 }),
     defineField({
@@ -53,7 +53,7 @@ export const family = defineType({
       options: { layout: "tags" },
     }),
     defineField({ name: "communication_style", title: "Communication style", type: "string" }),
-    defineField({ name: "verified", title: "Verified", type: "boolean", initialValue: true }),
+    defineField({ name: "verified", title: "Community reviewed", type: "boolean", initialValue: false, readOnly: true, description: "Set only by the administrator review API. Review evidence is private in D1. This is community review, not an automated identity or background check." }),
     defineField({
       name: "children",
       title: "Children",

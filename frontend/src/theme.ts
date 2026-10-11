@@ -1,5 +1,5 @@
 // Waddle Play (PlayPals Connect) design tokens. Light theme only.
-// Values sourced from /app/design_guidelines.json.
+// Values sourced from the WaddlePlay mobile canvas.
 
 import { useMemo } from "react";
 import { Appearance, StyleSheet, useColorScheme } from "react-native";
@@ -8,40 +8,40 @@ export type ColorScheme = "light" | "dark";
 
 const light = {
   // Surfaces
-  surface: "#F8F9FA",
-  onSurface: "#264653",
+  surface: "#FCFCFC",
+  onSurface: "#183044",
   surfaceSecondary: "#FFFFFF",
-  onSurfaceSecondary: "#264653",
-  surfaceTertiary: "#EAECEE",
-  onSurfaceTertiary: "#264653",
-  surfaceInverse: "#264653",
+  onSurfaceSecondary: "#183044",
+  surfaceTertiary: "#EDF3EF",
+  onSurfaceTertiary: "#183044",
+  surfaceInverse: "#183044",
   onSurfaceInverse: "#FFFFFF",
-  muted: "#6C7A89",
+  muted: "#748092",
 
   // Brand
-  brand: "#5E876D",
+  brand: "#48866F",
   onBrand: "#FFFFFF",
-  brandPrimary: "#5E876D",
+  brandPrimary: "#48866F",
   onBrandPrimary: "#FFFFFF",
-  brandSecondary: "#E9C46A",
-  onBrandSecondary: "#264653",
-  brandTertiary: "#F4A261",
-  onBrandTertiary: "#264653",
+  brandSecondary: "#FAE7B8",
+  onBrandSecondary: "#183044",
+  brandTertiary: "#FA7939",
+  onBrandTertiary: "#FFFFFF",
 
   // Status
-  success: "#5E876D",
+  success: "#48866F",
   onSuccess: "#FFFFFF",
   warning: "#E9C46A",
-  onWarning: "#264653",
+  onWarning: "#183044",
   error: "#D9534F",
   onError: "#FFFFFF",
-  info: "#264653",
+  info: "#183044",
   onInfo: "#FFFFFF",
 
   // Lines
-  border: "#EAECEE",
-  borderStrong: "#264653",
-  divider: "#EAECEE",
+  border: "#ECEEEB",
+  borderStrong: "#D8DCD7",
+  divider: "#ECEEEB",
 };
 
 export type ThemeColors = typeof light;
@@ -61,16 +61,16 @@ export const spacing = {
 
 export const radius = {
   sm: 6,
-  md: 12,
-  lg: 20,
+  md: 13,
+  lg: 16,
   pill: 999,
 };
 
 export const fonts = {
-  display: "Fraunces-Bold",
-  displayRegular: "Fraunces-Regular",
-  body: "DMSans-Regular",
-  bodyMedium: "DMSans-Medium",
+  display: "LibreBaskerville",
+  displayRegular: "LibreBaskerville",
+  body: "Lato-Regular",
+  bodyMedium: "Lato-Bold",
 };
 
 export function setColorScheme(scheme: ColorScheme | null) {
@@ -81,7 +81,7 @@ setColorScheme?.(themes.dark ? null : defaultScheme);
 
 export function useTheme(): { scheme: ColorScheme; colors: ThemeColors } {
   const system = useColorScheme();
-  const scheme: ColorScheme = system && themes[system] ? system : defaultScheme;
+  const scheme: ColorScheme = system === "dark" && themes.dark ? "dark" : defaultScheme;
   return { scheme, colors: themes[scheme] ?? themes.light };
 }
 

@@ -1,0 +1,9 @@
+# Copy to .dev.vars for local development. Never commit the real .dev.vars.
+# Production equivalents are set with `wrangler secret put`.
+
+JWT_SECRET="waddleplay-dev-secret-change-in-prod"
+SANITY_TOKEN="sk-your-sanity-write-token"
+# Comma-separated D1 user IDs allowed to review community verification.
+ADMIN_USER_IDS=""
+# Optional: required only when enhanced Expo Push Security is enabled.
+EXPO_ACCESS_TOKEN=""

@@ -85,6 +85,9 @@ android-sdk/
 .env.*
 *.env
 credentials.json
+google-services.json
+GoogleService-Info.plist
+*service-account*.json
 *.key
 .credentials
 
@@ -96,6 +99,7 @@ credentials.json
 # Local secrets (JWT_SECRET, SANITY_TOKEN) — never commit these.
 .dev.vars
 .dev.vars.*
+!worker/.dev.vars.example
 .wrangler/
 worker/wrangler-dev.log
 worker/wrangler-dev.log.err

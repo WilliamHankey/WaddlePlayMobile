@@ -27,7 +27,9 @@ export const thread = defineType({
     defineField({ name: "avatar_url", title: "Avatar URL", type: "url" }),
     defineField({ name: "last", title: "Last message preview", type: "string" }),
     defineField({ name: "at", title: "Last message time", type: "string", description: "Display string, e.g. `10:24`." }),
-    defineField({ name: "unread", title: "Unread count", type: "number", initialValue: 0 }),
+    defineField({ name: "unread", title: "Legacy unread count", type: "number", initialValue: 0 }),
+    defineField({ name: "unread_for_initiator", title: "Initiator unread", type: "number", readOnly: true }),
+    defineField({ name: "unread_for_recipient", title: "Recipient unread", type: "number", readOnly: true }),
     defineField({
       name: "messages",
       title: "Messages",
@@ -42,6 +44,7 @@ export const thread = defineType({
               type: "string",
               options: { list: ["me", "them"], layout: "radio" },
             }),
+            defineField({ name: "sender_id", title: "Sender user ID", type: "string", readOnly: true }),
             defineField({ name: "text", title: "Text", type: "text", rows: 2 }),
             defineField({ name: "at", title: "At", type: "string" }),
           ],
