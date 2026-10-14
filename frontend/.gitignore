@@ -37,4 +37,8 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# storybook (rn)
+.rnstorybook/storybook.requires.js
+.rnstorybook/storybook.requires.ts
+
 app-example

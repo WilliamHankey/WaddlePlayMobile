@@ -22,4 +22,14 @@ config.cacheStores = [
 // Reduce the number of workers to decrease resource usage
 config.maxWorkers = 2;
 
-module.exports = config;
+// Storybook (React Native). Wrapped last so it can re-write the entry point
+// when STORYBOOK_ENABLED=true. Guarded so the app keeps working if
+// @storybook/react-native is not installed yet.
+let withStorybook;
+try {
+  ({ withStorybook } = require('@storybook/react-native/withStorybook'));
+} catch {
+  withStorybook = undefined;
+}
+
+module.exports = withStorybook ? withStorybook(config) : config;
