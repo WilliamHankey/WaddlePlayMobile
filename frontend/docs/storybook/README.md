@@ -68,12 +68,9 @@ Notes:
 - `@react-native-vector-icons/feather`'s default entry is ESM but calls `require()` for its
   font file, which is undefined under Vite. The web config aliases the package to its
   `/static` entry (glyph map imported directly) and registers `Feather.ttf` as a `FontFace`.
-- The `deploy` job skips cleanly while GitHub Pages is unavailable. **This repository is
-  private**, and Pages on a private repo requires a paid plan (the Pages create call fails
-  with `422 plan does not support Pages`). The build job publishes `storybook-static` as a
-  downloadable workflow artifact instead. To get a public URL, either make the repo public,
-  upgrade the plan, or deploy the same `storybook-static/` folder to Cloudflare Pages,
-  Netlify or Vercel.
+- The build job also uploads `storybook-static` as a downloadable workflow artifact, and the
+  `deploy` job publishes it to GitHub Pages (the deploy step skips cleanly if Pages is off).
+  Live at <https://williamhankey.github.io/WaddlePlayMobile/>.
 
 ## Peer dependency note
 
