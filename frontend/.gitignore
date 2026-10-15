@@ -41,4 +41,7 @@ yarn-error.*
 .rnstorybook/storybook.requires.js
 .rnstorybook/storybook.requires.ts
 
+# storybook (web build)
+storybook-static/
+
 app-example

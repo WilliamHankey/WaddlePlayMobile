@@ -3,13 +3,15 @@
 This document describes the **best-effort** [Storybook for React Native](https://storybookjs.github.io/react-native/)
 integration for the Expo Router app in `frontend/`.
 
-> Status: **unverified**. The configuration, stories and scripts are in place, but this
-> setup was authored without a simulator/device and without running `yarn install`, so it has
-> not been executed. Run `yarn install` and start it on a device/simulator to confirm.
+> Status: the **web** Storybook builds and renders (verified with a production build). The
+> **on-device** Storybook is unverified — it was authored without a simulator/device. Run
+> `yarn storybook:ios` / `yarn storybook:android` to confirm it.
 
-Web-hosted Storybook (as added to the three web repos) does **not** apply here: RN
-Storybook renders on a native device/simulator and is driven by Metro over a WebSocket.
-There is no GitHub Pages deployment for this app.
+Two Storybooks are configured:
+
+- **Hosted (web)** — `@storybook/react-native-web-vite` renders the components in a browser
+  via `react-native-web`. Built to `storybook-static/` and published to GitHub Pages.
+- **On-device (native)** — `@storybook/react-native`, driven by Metro over a WebSocket.
 
 ## What was added
 
@@ -47,6 +49,32 @@ $env:STORYBOOK_ENABLED = "true"; yarn expo start
 `metro.config.js` guards the `require('@storybook/react-native/withStorybook')` call, so
 the app keeps bundling normally if Storybook is not installed.
 
+## Hosted web Storybook
+
+| File | Purpose |
+| --- | --- |
+| `.storybook/main.ts` | Web config (`@storybook/react-native-web-vite`); aliases the Feather icon entry to its web-safe `/static` build |
+| `.storybook/preview.tsx` | Same `SafeAreaProvider` decorator, plus loads the Feather icon web font |
+| `.storybook/globals.d.ts` | `*.ttf` module declaration |
+| `.github/workflows/storybook.yml` | CI build + GitHub Pages deploy |
+
+```sh
+yarn storybook:web     # storybook dev -p 6006
+yarn build-storybook   # storybook build -o storybook-static
+```
+
+Notes:
+
+- `@react-native-vector-icons/feather`'s default entry is ESM but calls `require()` for its
+  font file, which is undefined under Vite. The web config aliases the package to its
+  `/static` entry (glyph map imported directly) and registers `Feather.ttf` as a `FontFace`.
+- The `deploy` job skips cleanly while GitHub Pages is unavailable. **This repository is
+  private**, and Pages on a private repo requires a paid plan (the Pages create call fails
+  with `422 plan does not support Pages`). The build job publishes `storybook-static` as a
+  downloadable workflow artifact instead. To get a public URL, either make the repo public,
+  upgrade the plan, or deploy the same `storybook-static/` folder to Cloudflare Pages,
+  Netlify or Vercel.
+
 ## Peer dependency note
 
 `@storybook/react-native` lists `@gorhom/bottom-sheet >=4` as a peer. It is **not**
@@ -77,7 +105,9 @@ inset frame, so components using `react-native-safe-area-context` render determi
 ## Not covered
 
 - **No interaction / accessibility test runner.** The web repos run stories under Vitest;
-  RN Storybook has no equivalent here, so stories are display-only.
-- **No CI job.** Running RN Storybook in CI would require a simulator/emulator; not set up.
+  this project has no equivalent, so stories are display-only.
+- **No on-device CI job.** Publishing the *web* Storybook is automated
+  (`.github/workflows/storybook.yml`), but running the *native* Storybook in CI would
+  require a simulator/emulator; not set up.
 - **`TopBar` / navigation-dependent components** are not storied because they call
   `expo-router`'s `useRouter` and need a router context.
